@@ -3,6 +3,7 @@
 import React from 'react';
 import { ArrowLeft, Banknote, Landmark, Calculator, Receipt, TrendingUp, History, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { Breadcrumb } from './Breadcrumb';
 
 export const RefundExpectations = ({ onBack }: { onBack?: () => void }) => {
   const router = useRouter();
@@ -18,6 +19,11 @@ export const RefundExpectations = ({ onBack }: { onBack?: () => void }) => {
   return (
     <div className="min-h-screen bg-zinc-950 pt-24 pb-20 animate-fadeIn">
       <div className="max-w-4xl mx-auto px-4">
+        <Breadcrumb items={[
+          { label: 'Services', href: '/#services' },
+          { label: 'Debt Settlement Refund' }
+        ]} />
+        
         <button onClick={handleBack} className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors mb-12 group">
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
           <span className="text-[10px] uppercase font-bold tracking-[0.2em]">Return to Strategy Dashboard</span>
@@ -87,7 +93,7 @@ export const RefundExpectations = ({ onBack }: { onBack?: () => void }) => {
            <p className="text-zinc-400 text-sm mb-8 max-w-xl mx-auto">
              Most people assume they "lost" their money once it left their bank. If they violated the TSR, that money is legally yours to reclaim. 
            </p>
-           <button onClick={handleBack} className="bg-orange-600 text-white px-10 py-4 text-xs font-black uppercase tracking-widest hover:bg-white hover:text-orange-600 transition-all shadow-xl">
+           <button onClick={() => router.push('/case-review')} className="bg-orange-600 text-white px-10 py-4 text-xs font-black uppercase tracking-widest hover:bg-white hover:text-orange-600 transition-all shadow-xl">
               I'm Ready For My Audit
            </button>
         </div>

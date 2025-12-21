@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Scale, Menu, X } from 'lucide-react';
+import { Scale, Menu, X, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -10,6 +10,7 @@ export const Navbar = () => {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -51,7 +52,37 @@ export const Navbar = () => {
           <div className="hidden md:flex items-center space-x-12">
             <button onClick={(e) => handleMenuClick(e, 'violations')} className="text-xs font-semibold uppercase tracking-widest text-zinc-400 hover:text-white transition-colors">Violations</button>
             <button onClick={(e) => handleMenuClick(e, 'recovery')} className="text-xs font-semibold uppercase tracking-widest text-zinc-400 hover:text-white transition-colors">Recovery Process</button>
-            <button onClick={(e) => handleMenuClick(e, 'bankruptcy')} className="text-xs font-semibold uppercase tracking-widest text-zinc-400 hover:text-white transition-colors">Bankruptcy Truth</button>
+            
+            {/* Services Dropdown */}
+            <div 
+              className="relative group"
+              onMouseEnter={() => setServicesOpen(true)}
+              onMouseLeave={() => setServicesOpen(false)}
+            >
+              <button 
+                className="flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-zinc-400 group-hover:text-white transition-colors"
+              >
+                Services
+                <ChevronDown size={14} className={`transition-transform ${servicesOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {servicesOpen && (
+                <div className="absolute top-full left-0 mt-0 w-56 bg-zinc-900 border border-zinc-800 shadow-xl z-50">
+                  <Link
+                    href="/refund-expectations"
+                    className="block w-full text-left px-4 py-3 text-xs font-semibold uppercase tracking-widest text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors border-b border-zinc-800"
+                  >
+                    Debt Settlement Refund
+                  </Link>
+                  <Link
+                    href="/bankruptcy-myths"
+                    className="block w-full text-left px-4 py-3 text-xs font-semibold uppercase tracking-widest text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  >
+                    Bankruptcy
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="hidden md:flex items-center gap-6">
@@ -86,7 +117,36 @@ export const Navbar = () => {
         <div className="md:hidden absolute top-full left-0 w-full bg-zinc-900 border-b border-zinc-800 px-4 py-8 flex flex-col space-y-6">
           <button onClick={(e) => handleMenuClick(e, 'violations')} className="text-left text-xl font-serif text-white">Violations</button>
           <button onClick={(e) => handleMenuClick(e, 'recovery')} className="text-left text-xl font-serif text-white">Recovery Process</button>
-          <button onClick={(e) => handleMenuClick(e, 'bankruptcy')} className="text-left text-xl font-serif text-white">Bankruptcy Options</button>
+          
+          {/* Mobile Services Dropdown */}
+          <div>
+            <button 
+              onClick={() => setServicesOpen(!servicesOpen)}
+              className="flex items-center gap-1 text-left text-xl font-serif text-white w-full justify-between"
+            >
+              Services
+              <ChevronDown size={18} className={`transition-transform ${servicesOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {servicesOpen && (
+              <div className="mt-4 space-y-3 pl-4 border-l border-zinc-700">
+                <Link
+                  href="/refund-expectations"
+                  className="block text-zinc-400 hover:text-white transition-colors text-sm font-semibold"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Debt Settlement Refund
+                </Link>
+                <Link
+                  href="/bankruptcy-myths"
+                  className="block text-zinc-400 hover:text-white transition-colors text-sm font-semibold"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Bankruptcy
+                </Link>
+              </div>
+            )}
+          </div>
+          
           <button onClick={handleCaseReviewClick} className="bg-orange-600 text-white px-6 py-4 text-center font-bold uppercase tracking-wider">
             Start Evaluation
           </button>

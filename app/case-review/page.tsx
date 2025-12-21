@@ -13,12 +13,20 @@ export default function CaseReviewPage() {
     router.push(`/dashboard?caseNumber=${data.caseNumber}`);
   };
 
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 selection:bg-orange-600 selection:text-white overflow-x-hidden">
       <UrgentBanner />
       <Navbar />
       <div className="pt-32 pb-20">
-        <CaseReviewIntake onComplete={handleComplete} onBack={() => router.push('/')} />
+        <CaseReviewIntake onComplete={handleComplete} onBack={handleBack} />
       </div>
     </div>
   );
