@@ -1,0 +1,46 @@
+diff --git a/node_modules/lightningcss/node/index.js b/node_modules/lightningcss/node/index.js
+index 011d04b..c66c6ec 100644
+--- a/node_modules/lightningcss/node/index.js
++++ b/node_modules/lightningcss/node/index.js
+@@ -1,4 +1,22 @@
+-let parts = [process.platform, process.arch];
++// Force x64 on darwin to fix Turbopack architecture detection issue
++let arch = process.arch;
++if (process.platform === 'darwin') {
++  // On darwin, always try x64 first if available (for Intel Macs)
++  // This fixes issues where Turbopack incorrectly detects architecture
++  try {
++    require.resolve('lightningcss-darwin-x64');
++    arch = 'x64';
++  } catch (e) {
++    // x64 package not available, try arm64
++    try {
++      require.resolve('lightningcss-darwin-arm64');
++      arch = 'arm64';
++    } catch (e2) {
++      // Neither available, use detected arch
++    }
++  }
++}
++let parts = [process.platform, arch];
+ if (process.platform === 'linux') {
+   const { MUSL, familySync } = require('detect-libc');
+   const family = familySync();
+@@ -16,10 +34,15 @@ if (process.platform === 'linux') {
+ if (process.env.CSS_TRANSFORMER_WASM) {
+   module.exports = require(`../pkg`);
+ } else {
++  const packageName = `lightningcss-${parts.join('-')}`;
+   try {
+-    module.exports = require(`lightningcss-${parts.join('-')}`);
++    // Try to require the platform-specific package
++    module.exports = require(packageName);
+   } catch (err) {
+-    module.exports = require(`../lightningcss.${parts.join('-')}.node`);
++    // If package require fails, the fallback path won't work either
++    // because the .node file is inside the package, not in the lightningcss dir
++    // So we just throw a more helpful error
++    throw new Error(`Failed to load ${packageName}. Make sure it is installed: npm install ${packageName}`);
+   }
+ }
+ 

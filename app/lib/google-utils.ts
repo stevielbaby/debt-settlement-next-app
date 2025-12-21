@@ -69,7 +69,9 @@ export async function listCalendars(accessToken: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to list calendars');
+    const errorText = await response.text();
+    console.error('listCalendars error:', response.status, errorText);
+    throw new Error(`Failed to list calendars: ${response.status} ${errorText}`);
   }
 
   const data = await response.json();

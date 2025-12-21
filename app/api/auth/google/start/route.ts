@@ -4,7 +4,6 @@ import { decryptToken } from '@/app/lib/google-utils';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/userinfo.email'
 ];
 
