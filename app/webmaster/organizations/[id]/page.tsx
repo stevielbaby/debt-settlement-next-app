@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 interface Organization {
   id: string;
   name: string;

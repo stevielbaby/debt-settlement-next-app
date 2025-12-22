@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { Navbar } from '@/app/components/Navbar';
 import { UrgentBanner } from '@/app/components/UrgentBanner';
+
+export const dynamic = 'force-dynamic';
 import { EvaluationForm } from '@/app/components/EvaluationForm';
 import Link from 'next/link';
 
