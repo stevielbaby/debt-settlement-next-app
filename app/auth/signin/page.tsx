@@ -9,6 +9,7 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 
 function SignInContent() {
+  const isDev = process.env.NODE_ENV !== 'production';
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
@@ -155,32 +156,34 @@ function SignInContent() {
             {loading ? 'Authenticating...' : 'Access System'}
           </button>
 
-          <div className="space-y-3 mt-6 pt-6 border-t border-zinc-800">
-            <p className="text-zinc-500 text-xs uppercase tracking-widest">Quick Start (Dev)</p>
-            <button
-              type="button"
-              onClick={() => {
-                setAutoSubmitting(true);
-                setEmail('webmaster@strattondefense.com');
-                setPassword('webmaster123');
-              }}
-              className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white px-4 py-2 font-bold uppercase tracking-wider text-xs transition-all border border-orange-500"
-            >
-              🔧 Webmaster Dashboard
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAutoSubmitting(true);
-                setEmail('operator@strattondefense.com');
-                setPassword('operator123');
-              }}
-              className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 font-bold uppercase tracking-wider text-xs transition-all border border-zinc-700 hover:border-orange-600"
-            >
-              📋 Try Operator Account
-            </button>
-            <p className="text-[10px] text-zinc-600 text-center mt-2">Auto-fills and submits</p>
-          </div>
+          {isDev && (
+            <div className="space-y-3 mt-6 pt-6 border-t border-zinc-800">
+              <p className="text-zinc-500 text-xs uppercase tracking-widest">Quick Start (Dev)</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setAutoSubmitting(true);
+                  setEmail('admin@woodslegal.com');
+                  setPassword('webmaster123');
+                }}
+                className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white px-4 py-2 font-bold uppercase tracking-wider text-xs transition-all border border-orange-500"
+              >
+                🔧 Webmaster Dashboard
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAutoSubmitting(true);
+                  setEmail('operator@woodslegal.com');
+                  setPassword('operator123');
+                }}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 font-bold uppercase tracking-wider text-xs transition-all border border-zinc-700 hover:border-orange-600"
+              >
+                📋 Try Operator Account
+              </button>
+              <p className="text-[10px] text-zinc-600 text-center mt-2">Auto-fills and submits</p>
+            </div>
+          )}
         </form>
 
         <div className="text-center">

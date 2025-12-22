@@ -10,7 +10,7 @@ async function createWebmasterUser() {
   try {
     console.log("Creating webmaster user...");
 
-    const email = "webmaster@strattondefense.com";
+    const email = "admin@woodslegal.com";
     const password = "webmaster123";
     const name = "Webmaster Admin";
 
