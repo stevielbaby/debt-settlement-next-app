@@ -6,6 +6,7 @@
 
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import Stripe from "stripe";
 import {
   getOrCreateStripeCustomer,
   createSubscription,
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
     }
 
     // Create subscription in Stripe
-    const stripeSubscription = await createSubscription(
+    const subResult = await createSubscription(
       stripeCustomerId,
       stripePriceId,
       {
@@ -110,16 +111,24 @@ export async function POST(request: Request) {
       }
     );
 
+    // Extract subscription details with explicit typing
+    const { current_period_start, current_period_end, id, status } = subResult as unknown as {
+      current_period_start: number;
+      current_period_end: number;
+      id: string;
+      status: string;
+    };
+
     // Save subscription to database
-    const periodStart = new Date(stripeSubscription.current_period_start * 1000);
-    const periodEnd = new Date(stripeSubscription.current_period_end * 1000);
+    const periodStart = new Date(current_period_start * 1000);
+    const periodEnd = new Date(current_period_end * 1000);
 
     await saveStripeSubscription(
       organizationId,
-      stripeSubscription.id,
+      id,
       stripePriceId,
       planId,
-      stripeSubscription.status,
+      status,
       periodStart,
       periodEnd
     );
@@ -127,13 +136,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       subscription: {
-        id: stripeSubscription.id,
-        status: stripeSubscription.status,
+        id: id,
+        status: status,
         planName: plan.name,
         amount: plan.price,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
-        clientSecret: (stripeSubscription as any).latest_invoice?.payment_intent
+        clientSecret: (subResult as any).latest_invoice?.payment_intent
           ?.client_secret,
       },
     });

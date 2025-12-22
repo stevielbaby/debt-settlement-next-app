@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Lock, Calendar, RotateCcw, Trash2, Plus, Check, AlertCircle } from 'lucide-react';
 
@@ -9,7 +9,7 @@ interface TimeSlot {
   minute: number;
 }
 
-export const AdminCalendarSettings = ({ onBack }: { onBack: () => void }) => {
+function AdminCalendarSettingsContent({ onBack }: { onBack: () => void }) {
   const searchParams = useSearchParams();
   const [connectionStatus, setConnectionStatus] = useState<{
     connected: boolean;
@@ -413,5 +413,13 @@ export const AdminCalendarSettings = ({ onBack }: { onBack: () => void }) => {
         </div>
       </div>
     </div>
+  );
+}
+
+export const AdminCalendarSettings = ({ onBack }: { onBack: () => void }) => {
+  return (
+    <Suspense fallback={<div className="bg-zinc-900 p-8">Loading...</div>}>
+      <AdminCalendarSettingsContent onBack={onBack} />
+    </Suspense>
   );
 };

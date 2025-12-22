@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Navbar } from '@/app/components/Navbar';
 import { UrgentBanner } from '@/app/components/UrgentBanner';
 import { PriorityDashboard } from '@/app/components/PriorityDashboard';
 
-export default function DashboardPage() {
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<any>(null);
@@ -145,6 +145,14 @@ export default function DashboardPage() {
         onRefreshUserData={refreshUserData}
       />
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+      <DashboardContent />
+    </Suspense>
   );
 }
 

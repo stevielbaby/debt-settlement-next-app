@@ -15,7 +15,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2024-12-01.acacia",
+  apiVersion: "2025-12-15.clover",
 });
 
 /**
@@ -81,7 +81,7 @@ export async function createSubscription(
   stripeCustomerId: string,
   stripePriceId: string,
   metadata?: Record<string, string>
-) {
+): Promise<Stripe.Subscription> {
   try {
     const subscription = await stripe.subscriptions.create({
       customer: stripeCustomerId,
@@ -206,7 +206,7 @@ export async function createStripeProduct(
  */
 export async function getUpcomingInvoice(customerId: string) {
   try {
-    const invoice = await stripe.invoices.retrieveUpcoming({
+    const invoice = await (stripe.invoices as any).retrieveUpcoming({
       customer: customerId,
     });
 
