@@ -90,19 +90,12 @@ export const AdminSettings = ({ onBack, onNavigate, onLogout }: { onBack?: () =>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <Database className="text-orange-600" size={20} />
-                <h2 className="text-white font-bold uppercase tracking-widest text-xs">Case Management</h2>
+                <h2 className="text-white font-bold uppercase tracking-widest text-xs">Account</h2>
               </div>
             </div>
             <button
-              onClick={() => handleNavigate('submissions')}
-              className="w-full bg-orange-600 text-white font-black uppercase tracking-widest py-4 hover:bg-orange-500 transition-all flex items-center justify-center gap-2"
-            >
-              <FileText size={16} />
-              Review All Submissions
-            </button>
-            <button
               onClick={handleLogout}
-              className="w-full mt-4 border border-zinc-600 text-zinc-400 hover:text-white hover:border-zinc-400 font-bold uppercase tracking-widest py-3 transition-all flex items-center justify-center gap-2"
+              className="w-full border border-zinc-600 text-zinc-400 hover:text-white hover:border-zinc-400 font-bold uppercase tracking-widest py-3 transition-all flex items-center justify-center gap-2"
             >
               <LogOut size={16} />
               Logout

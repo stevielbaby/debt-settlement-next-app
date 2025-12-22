@@ -1,22 +1,20 @@
-# Dependencies stage
-FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+# Dependencies stage (Debian/glibc to match lightningcss -gnu binaries)
+FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
 # Copy package files
 COPY package.json package-lock.json* ./
-COPY patches ./patches
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (fallback if no lockfile)
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Builder stage
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Apply patches
+# Apply patches (safe even if no patches, see package.json change)
 RUN npm run postinstall
 
 # Set environment variables for build
@@ -26,15 +24,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Create non-root user (Debian)
+RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -s /bin/bash -m nextjs
 
 # Copy necessary files from builder
 COPY --from=builder /app/public ./public
@@ -46,8 +43,9 @@ USER nextjs
 EXPOSE 3000
 
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+ENV HOSTNAME=0.0.0.0
 
 CMD ["node", "server.js"]
+
 
 

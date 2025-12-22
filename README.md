@@ -251,6 +251,18 @@ ports:
 - Check file permissions on your host system
 - Restart the container
 
+**Issue: lightningcss on Alpine (Error: Cannot find module 'lightningcss...' or native binding load failure)**
+- Cause: Alpine uses musl, but your project pulls glibc (gnu) lightningcss binaries by default.
+- Fix (recommended): Use Debian-based Node images in Docker (see updated Dockerfile).
+- Alternative (for Alpine/local): Include musl builds in optionalDependencies (added to package.json).
+
+**Issue: Docker build fails copying 'patches'**
+- Cause: `COPY patches ./patches` fails if the patches directory doesn’t exist.
+- Fix: Dockerfile no longer copies `patches` explicitly; `patch-package` runs safely even if there are no patches.
+
+**Issue: npm ci fails because package-lock.json is missing**
+- Fix: Dockerfile falls back to `npm install` when no lockfile is present.
+
 ## Deployment
 
 ### Docker Deployment

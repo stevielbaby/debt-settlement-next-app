@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Database, Search, Calendar, Mail, Phone, FileText, RefreshCw, Clock, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Database, Search, Calendar, Mail, Phone, FileText, RefreshCw, Clock, CheckCircle2, Plus, Briefcase } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Lead {
@@ -15,10 +15,8 @@ interface Lead {
   email: string;
   phone: string;
   created_at: string;
-  appointment_date?: string;
-  appointment_time?: string;
-  appointment_slot_start?: string;
-  appointment_slot_end?: string;
+  converted?: boolean;
+  organization?: string;
 }
 
 export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
@@ -26,12 +24,15 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [converting, setConverting] = useState<number | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   const fetchLeads = async () => {
     try {
       console.log('Fetching leads...');
       setLoading(true);
-      const response = await fetch('/api/leads');
+      const response = await fetch('/api/operator/leads');
       console.log('Response status:', response.status);
       const result = await response.json();
       console.log('Response data:', result);
@@ -49,6 +50,39 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
     }
   };
 
+  const handleCreateCase = async () => {
+    if (!selectedLead) return;
+
+    try {
+      setConverting(selectedLead.id);
+      setShowModal(false);
+      const response = await fetch('/api/operator/cases/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: selectedLead.id }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        // Remove the converted lead from the list
+        setLeads(leads.filter(l => l.id !== selectedLead.id));
+      } else {
+        throw new Error(result.error || 'Failed to create case');
+      }
+    } catch (err) {
+      console.error('Conversion error:', err);
+    } finally {
+      setConverting(null);
+      setSelectedLead(null);
+    }
+  };
+
+  const openConfirmModal = (lead: Lead) => {
+    setSelectedLead(lead);
+    setShowModal(true);
+  };
+
   useEffect(() => {
     fetchLeads();
   }, []);
@@ -63,17 +97,6 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
     });
   };
 
-  const formatAppointmentDate = (dateString: string | undefined) => {
-    if (!dateString) return null;
-    const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
   const handleBack = () => {
     if (onBack) {
       onBack();
@@ -83,7 +106,49 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 pt-24 pb-20 animate-fadeIn">
+    <>
+      {/* Confirmation Modal */}
+      {showModal && selectedLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fadeIn">
+          <div className="bg-zinc-900 border-2 border-orange-600 max-w-md w-full animate-slideUp">
+            <div className="border-b border-zinc-800 p-6">
+              <h3 className="text-xl font-serif text-white uppercase tracking-tight">Create Case</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-zinc-300 leading-relaxed">
+                Convert this lead to a case? This will add it to your case queue.
+              </p>
+              <div className="bg-zinc-950 border border-zinc-800 p-4 space-y-2">
+                <div className="flex items-center gap-2 text-orange-600 text-xs font-bold uppercase tracking-widest">
+                  <Briefcase size={12} />
+                  Lead Details
+                </div>
+                <div className="text-white font-bold">{selectedLead.first_name} {selectedLead.last_name}</div>
+                <div className="text-zinc-400 text-sm">{selectedLead.email}</div>
+                <div className="text-zinc-500 text-xs">{selectedLead.situation}</div>
+              </div>
+            </div>
+            <div className="border-t border-zinc-800 p-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setSelectedLead(null);
+                }}
+                className="flex-1 px-6 py-3 border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 font-bold uppercase tracking-widest text-xs transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateCase}
+                className="flex-1 px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold uppercase tracking-widest text-xs transition-all"
+              >
+                Create Case
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4">
         <button onClick={handleBack} className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors mb-12 group">
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
@@ -142,20 +207,20 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
               <table className="w-full">
                 <thead className="bg-zinc-950/50">
                   <tr>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Case #</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Lead #</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Client</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Situation</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Debt Amount</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Contact</th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Appointment</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Submitted</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-zinc-500">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {leads.map((lead) => (
                     <tr key={lead.id} className="border-t border-zinc-800 hover:bg-zinc-950/30 transition-colors">
                       <td className="px-6 py-4">
-                        <span className="font-mono text-white text-xs">CASE-{lead.case_number?.toString().padStart(4, '0') || lead.id.toString().padStart(4, '0')}</span>
+                        <span className="font-mono text-white text-xs">LEAD-{lead.id.toString().padStart(5, '0')}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div>
@@ -165,8 +230,8 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="text-zinc-300 text-xs">{lead.situation}</span>
+                      <td className="px-6 py-4 max-w-xs">
+                        <span className="text-zinc-300 text-xs line-clamp-2">{lead.situation}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-orange-600 font-bold text-xs">{lead.debt_amount || 'Not specified'}</span>
@@ -186,30 +251,29 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {lead.appointment_date && lead.appointment_time ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-green-500 text-xs font-bold">
-                              <CheckCircle2 size={12} />
-                              Scheduled
-                            </div>
-                            <div className="flex items-center gap-2 text-zinc-300 text-xs">
-                              <Calendar size={12} />
-                              {formatAppointmentDate(lead.appointment_date)}
-                            </div>
-                            <div className="flex items-center gap-2 text-zinc-300 text-xs">
-                              <Clock size={12} />
-                              {lead.appointment_time}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-zinc-600 text-xs italic">Not scheduled</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
                         <div className="flex items-center gap-2 text-zinc-500 text-xs">
                           <Calendar size={12} />
                           {formatDate(lead.created_at)}
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => openConfirmModal(lead)}
+                          disabled={converting === lead.id}
+                          className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {converting === lead.id ? (
+                            <>
+                              <RefreshCw size={12} className="animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            <>
+                              <Briefcase size={12} />
+                              Create Case
+                            </>
+                          )}
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -223,7 +287,7 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
           <Database size={12} /> Data is fetched from the secure database. All submissions are confidential and protected.
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

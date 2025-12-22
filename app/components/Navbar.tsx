@@ -36,7 +36,7 @@ export const Navbar = () => {
   };
   
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 border-b ${scrolled ? 'bg-zinc-950/90 backdrop-blur-md border-zinc-800 py-2' : 'bg-transparent border-transparent py-6'}`}>
+    <nav className={`fixed top-4 left-0 right-0 z-40 transition-all duration-300 border-b ${scrolled ? 'bg-zinc-950/90 backdrop-blur-md border-zinc-800 py-2' : 'bg-transparent border-transparent py-6'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center">
           <Link href="/" className="flex-shrink-0 flex items-center gap-3 group">
@@ -90,12 +90,6 @@ export const Navbar = () => {
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">24/7 Intake Line</span>
               <span className="font-mono text-white font-bold tracking-tight">1-800-555-0199</span>
             </div>
-            <Link 
-              href="/admin"
-              className="border border-zinc-600 text-zinc-400 hover:text-white hover:border-zinc-400 px-4 py-2 font-bold uppercase tracking-wider text-xs transition-all"
-            >
-              Admin
-            </Link>
             <button 
               onClick={handleCaseReviewClick} 
               className="bg-orange-600 hover:bg-orange-500 text-white px-6 py-3 font-bold uppercase tracking-wider text-xs transition-all hover:scale-105 shadow-[0_0_20px_rgba(234,88,12,0.3)]"

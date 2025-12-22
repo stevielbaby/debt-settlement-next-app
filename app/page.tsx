@@ -267,8 +267,8 @@ export default function HomePage() {
             </button>
             <div className="mt-16 text-[10px] uppercase tracking-widest opacity-60 flex flex-col items-center gap-4">
               <span>Stratton Defense Law Firm • 1200 Legal Plaza, Washington DC</span>
-              <Link href="/admin" className="text-white/20 hover:text-white/50 transition-colors flex items-center gap-2">
-                <Server size={10} /> Admin Panel
+              <Link href="/auth/signin?callbackUrl=/operator" className="text-white/40 hover:text-white transition-colors text-[9px] font-semibold">
+                Staff Login
               </Link>
             </div>
           </div>
