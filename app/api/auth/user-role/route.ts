@@ -14,7 +14,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      role: session.user.role,
+      role: (session.user as any).role,
       email: session.user.email,
     });
   } catch (error) {
