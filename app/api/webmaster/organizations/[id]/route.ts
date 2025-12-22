@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -14,6 +14,8 @@ export async function GET(
         { status: 401 }
       );
     }
+
+    const { id } = await params;
 
     const orgResult = await sql`
       SELECT 
@@ -34,7 +36,7 @@ export async function GET(
       LEFT JOIN app.usage_metrics um ON o.id = um.organization_id 
         AND um.metric_name = 'case_created'
         AND um.month_year = to_char(CURRENT_DATE, 'YYYY-MM')
-      WHERE o.id = ${params.id}
+      WHERE o.id = ${id}
     `;
 
     if (orgResult.length === 0) {
@@ -63,7 +65,7 @@ export async function GET(
     const usersResult = await sql`
       SELECT id, email, role, created_at
       FROM app.users
-      WHERE organization_id = ${params.id}
+      WHERE organization_id = ${id}
       ORDER BY created_at DESC
     `;
 
@@ -90,7 +92,7 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -101,6 +103,7 @@ export async function PATCH(
       );
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { name, email, contact_name, phone, address } = body;
 
@@ -111,7 +114,7 @@ export async function PATCH(
           contact_name = COALESCE(${contact_name}, contact_name),
           phone = COALESCE(${phone}, phone),
           address = COALESCE(${address}, address)
-      WHERE id = ${params.id}
+      WHERE id = ${id}
       RETURNING id, name, email, contact_name, phone, address, created_at
     `;
 
