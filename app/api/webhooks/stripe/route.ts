@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     }
 
     // Verify webhook signature
-    const event = getWebhookEvent(body, signature, secret);
+    const event = await getWebhookEvent(body, signature, secret);
 
     console.log(`Processing Stripe event: ${event.type}`);
 
