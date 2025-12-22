@@ -1,7 +1,10 @@
 /**
  * Create a test webmaster user for development
- * Run with: npx ts-node scripts/create-webmaster.ts
+ * Run with: npx tsx scripts/create-webmaster.ts
  */
+
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 
 import bcrypt from "bcryptjs";
 import { sql } from "@/app/lib/db";

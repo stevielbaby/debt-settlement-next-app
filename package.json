@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "validate": "bash scripts/validate.sh",
+    "db:migrate:webmaster": "bash scripts/run-psql-migration.sh",
     "postinstall": "patch-package || true",
     "docker:dev": "docker compose up || docker-compose up",
     "docker:build": "docker build -t debt-settlement-app .",

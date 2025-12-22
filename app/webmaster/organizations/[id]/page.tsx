@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 
@@ -28,22 +28,39 @@ interface User {
   created_at: string;
 }
 
-export default function OrganizationDetail({ params }: { params: { id: string } }) {
+interface InviteCodeData {
+  inviteCode: string;
+  inviteLink: string;
+}
+
+export default function OrganizationDetail() {
   const router = useRouter();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [inviteCode, setInviteCode] = useState<string>('');
+  const [inviteLink, setInviteLink] = useState<string>('');
+  const [loadingInviteCode, setLoadingInviteCode] = useState(false);
+  const [inviteCodeError, setInviteCodeError] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const routeParams = useParams();
+  const orgId = Array.isArray(routeParams?.id)
+    ? routeParams.id[0]
+    : (routeParams?.id as string | undefined);
 
   useEffect(() => {
-    fetchOrganization();
-  }, [params.id]);
+    if (!orgId) return;
+    fetchOrganization(orgId);
+    fetchInviteCode(orgId);
+  }, [orgId]);
 
-  const fetchOrganization = async () => {
+  const fetchOrganization = async (id: string) => {
     try {
       setLoading(true);
       setError('');
-      const response = await fetch(`/api/webmaster/organizations/${params.id}`);
+      const response = await fetch(`/api/webmaster/organizations/${id}`);
       const data = await response.json();
       if (data.success) {
         setOrganization(data.organization);
@@ -55,6 +72,57 @@ export default function OrganizationDetail({ params }: { params: { id: string } 
       setError('Failed to load organization');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchInviteCode = async (id: string) => {
+    try {
+      setLoadingInviteCode(true);
+      setInviteCodeError('');
+      const response = await fetch(`/api/webmaster/organizations/${id}/invite-code`);
+      const data = await response.json();
+      if (data.success) {
+        setInviteCode(data.inviteCode || '');
+        setInviteLink(data.inviteLink || '');
+      } else {
+        setInviteCodeError(data.error || 'Failed to load invite code');
+      }
+    } catch (err) {
+      setInviteCodeError('Failed to load invite code');
+    } finally {
+      setLoadingInviteCode(false);
+    }
+  };
+
+  const handleGenerateNewCode = async () => {
+    if (!orgId) return;
+    try {
+      setLoadingInviteCode(true);
+      setInviteCodeError('');
+      const response = await fetch(`/api/webmaster/organizations/${orgId}/invite-code`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (data.success) {
+        setInviteCode(data.inviteCode);
+        setInviteLink(data.inviteLink);
+      } else {
+        setInviteCodeError(data.error || 'Failed to generate invite code');
+      }
+    } catch (err) {
+      setInviteCodeError('Failed to generate invite code');
+    } finally {
+      setLoadingInviteCode(false);
+    }
+  };
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteCode);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      setInviteCodeError('Failed to copy code to clipboard');
     }
   };
 
@@ -163,6 +231,72 @@ export default function OrganizationDetail({ params }: { params: { id: string } 
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Invite Code Section */}
+          <div className="bg-zinc-900 border border-zinc-800 p-6 space-y-4">
+            <h3 className="text-lg font-serif font-bold text-white uppercase tracking-tight">Operator Invitation</h3>
+            {inviteCodeError && (
+              <div className="bg-red-900/20 border border-red-800 p-3 rounded text-red-400 text-sm">
+                {inviteCodeError}
+              </div>
+            )}
+            {loadingInviteCode ? (
+              <div className="flex items-center justify-center py-8 text-zinc-500">
+                <RefreshCw className="animate-spin mr-2" size={16} />
+                Loading invite code...
+              </div>
+            ) : inviteCode ? (
+              <div className="space-y-4">
+                <p className="text-zinc-400 text-sm">
+                  Share this code with operators to let them join your organization.
+                </p>
+                <div className="bg-zinc-800 border border-zinc-700 p-4 rounded space-y-3">
+                  <div>
+                    <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-2">Invite Code</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-zinc-900 border border-zinc-600 p-3 rounded font-mono text-lg font-bold text-orange-500">
+                        {inviteCode}
+                      </code>
+                      <button
+                        onClick={handleCopyCode}
+                        className={`px-3 py-2 rounded text-xs font-bold uppercase tracking-widest transition-all ${
+                          copySuccess
+                            ? 'bg-green-600 text-white'
+                            : 'bg-zinc-700 text-white hover:bg-zinc-600'
+                        }`}
+                      >
+                        {copySuccess ? '✓ Copied' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-2">Invite Link</p>
+                    <p className="text-xs text-zinc-400 break-all bg-zinc-900 p-2 rounded border border-zinc-700">
+                      {inviteLink}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleGenerateNewCode}
+                  disabled={loadingInviteCode}
+                  className="w-full px-4 py-2 border border-zinc-700 text-white hover:border-orange-600 text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+                >
+                  Generate New Code
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-zinc-400 text-sm">No invite code generated yet.</p>
+                <button
+                  onClick={handleGenerateNewCode}
+                  disabled={loadingInviteCode}
+                  className="w-full px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+                >
+                  Generate Invite Code
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Usage Info */}

@@ -60,21 +60,49 @@ export async function saveStripeSubscription(
   currentPeriodEnd: Date
 ) {
   try {
+    // Map Stripe subscription status to database status
+    // Stripe uses: 'active', 'past_due', 'incomplete', 'incomplete_expired', 'canceled'
+    // Database expects: 'active', 'past_due', 'cancelled', 'grace_period'
+    let dbStatus = status;
+    if (status === 'canceled') {
+      dbStatus = 'cancelled';  // Convert American to British spelling
+    } else if (status === 'incomplete' || status === 'incomplete_expired') {
+      dbStatus = 'active';  // Treat incomplete subscriptions as active until they resolve
+    }
+    // All other statuses (active, past_due) are already compatible
+
+    // Validate and normalize dates
+    let start = currentPeriodStart;
+    let end = currentPeriodEnd;
+
+    // If dates are invalid, use current time and add 1 month
+    if (isNaN(start.getTime()) || !start) {
+      start = new Date();
+    }
+    if (isNaN(end.getTime()) || !end) {
+      end = new Date();
+      end.setMonth(end.getMonth() + 1);
+    }
+
+    console.log("Saving subscription with dates:", { start: start.toISOString(), end: end.toISOString() });
+
     // First, get the existing subscription ID to see if we're updating
     const existing = await sql`
       SELECT id FROM app.organization_subscriptions
-      WHERE organization_id = ${organizationId}
+      WHERE org_id = ${organizationId} OR organization_id = ${organizationId}
       LIMIT 1
     `;
 
     if (existing.length > 0) {
-      // Update existing subscription
+      // Update existing subscription - populate both org_id and organization_id for dual-column pattern
       const result = await sql`
         UPDATE app.organization_subscriptions
-        SET plan_id = ${planId},
-            status = ${status},
-            current_period_start = ${currentPeriodStart},
-            current_period_end = ${currentPeriodEnd},
+        SET org_id = ${organizationId},
+            organization_id = ${organizationId},
+            plan_id = ${planId},
+            status = ${dbStatus},
+            current_period_start = ${start.toISOString()},
+            current_period_end = ${end.toISOString()},
             stripe_subscription_id = ${stripeSubscriptionId},
             stripe_price_id = ${stripePriceId},
             updated_at = NOW()
@@ -84,12 +112,15 @@ export async function saveStripeSubscription(
 
       return result[0];
     } else {
-      // Create new subscription
+      // Create new subscription - populate both org_id (legacy, NOT NULL) and organization_id (new) for dual-column pattern
       const result = await sql`
         INSERT INTO app.organization_subscriptions (
+          org_id,
           organization_id,
           plan_id,
           status,
+          billing_cycle_start,
+          billing_cycle_end,
           current_period_start,
           current_period_end,
           stripe_subscription_id,
@@ -99,10 +130,13 @@ export async function saveStripeSubscription(
         )
         VALUES (
           ${organizationId},
+          ${organizationId},
           ${planId},
-          ${status},
-          ${currentPeriodStart},
-          ${currentPeriodEnd},
+          ${dbStatus},
+          ${start.toISOString()},
+          ${end.toISOString()},
+          ${start.toISOString()},
+          ${end.toISOString()},
           ${stripeSubscriptionId},
           ${stripePriceId},
           NOW(),
@@ -127,7 +161,7 @@ export async function getStripeSubscription(organizationId: string) {
     const result = await sql`
       SELECT stripe_subscription_id, stripe_price_id, status, current_period_end
       FROM app.organization_subscriptions
-      WHERE organization_id = ${organizationId}
+      WHERE org_id = ${organizationId} OR organization_id = ${organizationId}
       LIMIT 1
     `;
 

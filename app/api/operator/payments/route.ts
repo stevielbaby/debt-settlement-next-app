@@ -30,13 +30,13 @@ export async function GET() {
         sp.name as plan_name,
         sp.price,
         sp.monthly_limit,
-        COALESCE(um.current_month_count, 0) as current_usage
+        COALESCE(um.metric_value, 0) as current_usage
       FROM app.organization_subscriptions os
       JOIN app.subscription_plans sp ON os.plan_id = sp.id
-      LEFT JOIN app.usage_metrics um ON os.organization_id = um.organization_id
-        AND um.metric_name = 'case_created'
-        AND um.month_year = to_char(CURRENT_DATE, 'YYYY-MM')
-      WHERE os.organization_id = ${organizationId}
+      LEFT JOIN app.usage_metrics um ON os.organization_id = um.org_id
+        AND um.metric_type = 'case_created'
+        AND um.billing_cycle_start <= CURRENT_DATE AND um.billing_cycle_end >= CURRENT_DATE
+      WHERE os.organization_id = ${organizationId} OR os.org_id = ${organizationId}
       LIMIT 1
     `;
 

@@ -1,4 +1,4 @@
-'use client';
+`'use client';
 
 import React, { useEffect, useState } from 'react';
 import { RefreshCw, CreditCard, AlertCircle, CheckCircle } from 'lucide-react';

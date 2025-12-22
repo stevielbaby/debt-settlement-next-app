@@ -36,19 +36,21 @@ export async function GET() {
     const nearLimitResult = await sql`
       SELECT COUNT(DISTINCT os.organization_id) as count
       FROM app.usage_metrics um
-      JOIN app.organization_subscriptions os ON um.organization_id = os.organization_id
+      JOIN app.organization_subscriptions os ON um.org_id = os.organization_id
       JOIN app.subscription_plans sp ON os.plan_id = sp.id
-      WHERE um.metric_name = 'case_created'
-      AND (um.current_month_count::float / NULLIF(sp.monthly_limit::float, 0)) > 0.9
+      WHERE um.metric_type = 'case_created'
+      AND um.billing_cycle_start <= CURRENT_DATE
+      AND um.billing_cycle_end >= CURRENT_DATE
+      AND (um.metric_value::float / NULLIF(sp.monthly_limit::float, 0)) > 0.9
     `;
     const organizationsNearLimit = parseInt(nearLimitResult[0]?.count ?? 0);
 
     // Get total API requests this month
     const apiRequestsResult = await sql`
-      SELECT COALESCE(SUM(current_month_count), 0) as total
+      SELECT COALESCE(SUM(metric_value), 0) as total
       FROM app.usage_metrics
-      WHERE metric_name = 'api_request'
-      AND month_year >= to_char(CURRENT_DATE - interval '30 days', 'YYYY-MM')
+      WHERE metric_type = 'api_request'
+      AND billing_cycle_start >= CURRENT_DATE - interval '30 days'
     `;
     const totalAPIRequests = parseInt(apiRequestsResult[0]?.total ?? 0);
 

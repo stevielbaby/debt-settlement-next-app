@@ -29,7 +29,24 @@ export async function POST(request: Request) {
     // Verify webhook signature
     const event = await getWebhookEvent(body, signature, secret);
 
-    console.log(`Processing Stripe event: ${event.type}`);
+    console.log(`Processing Stripe event: ${event.type} (${event.id})`);
+
+    // FIX 4 & 7: Check if this event has already been processed (idempotency)
+    try {
+      const existing = await sql`
+        SELECT id FROM app.webhook_events
+        WHERE stripe_event_id = ${event.id}
+        LIMIT 1
+      `;
+
+      if (existing.length > 0) {
+        console.log(`Event ${event.id} already processed, skipping`);
+        return NextResponse.json({ success: true, received: true, duplicate: true });
+      }
+    } catch (err) {
+      // webhook_events table might not exist yet, continue without deduplication
+      console.log("webhook_events table not available, skipping deduplication check");
+    }
 
     // Handle different event types
     switch (event.type) {
@@ -58,11 +75,17 @@ export async function POST(request: Request) {
         const subscription = event.data.object as any;
         console.log(`Subscription updated: ${subscription.id}`);
 
-        // Get organization from customer metadata
-        const customer = await stripe.customers.retrieve(subscription.customer as string);
-        const organizationId = (customer as any).metadata?.organization_id;
+        try {
+          // Get organization from customer metadata
+          const customer = await stripe.customers.retrieve(subscription.customer as string);
+          const organizationId = (customer as any).metadata?.organization_id;
 
-        if (organizationId) {
+          // FIX 5: Validate organizationId before processing
+          if (!organizationId) {
+            console.error(`Subscription ${subscription.id} has no organizationId in metadata`);
+            break;
+          }
+
           const periodStart = new Date(subscription.current_period_start * 1000);
           const periodEnd = new Date(subscription.current_period_end * 1000);
 
@@ -87,6 +110,19 @@ export async function POST(request: Request) {
               periodEnd
             );
           }
+
+          // Record event as processed
+          try {
+            await sql`
+              INSERT INTO app.webhook_events (stripe_event_id, event_type, organization_id)
+              VALUES (${event.id}, ${event.type}, ${organizationId})
+            `;
+          } catch (err) {
+            // webhook_events table might not exist, continue
+          }
+        } catch (error) {
+          console.error(`Error processing subscription.updated event ${event.id}:`, error);
+          // Don't rethrow - return 200 to prevent Stripe retry, but log the error
         }
 
         break;
@@ -96,18 +132,37 @@ export async function POST(request: Request) {
         const subscription = event.data.object as any;
         console.log(`Subscription deleted: ${subscription.id}`);
 
-        // Get organization from customer metadata
-        const customer = await stripe.customers.retrieve(subscription.customer as string);
-        const organizationId = (customer as any).metadata?.organization_id;
+        try {
+          // Get organization from customer metadata
+          const customer = await stripe.customers.retrieve(subscription.customer as string);
+          const organizationId = (customer as any).metadata?.organization_id;
 
-        if (organizationId) {
+          // FIX 5: Validate organizationId before processing
+          if (!organizationId) {
+            console.error(`Subscription ${subscription.id} has no organizationId in metadata`);
+            break;
+          }
+
           // Update subscription status in database
           await sql`
             UPDATE app.organization_subscriptions
-            SET status = 'canceled',
+            SET status = 'cancelled',
                 updated_at = NOW()
             WHERE stripe_subscription_id = ${subscription.id}
           `;
+
+          // Record event as processed
+          try {
+            await sql`
+              INSERT INTO app.webhook_events (stripe_event_id, event_type, organization_id)
+              VALUES (${event.id}, ${event.type}, ${organizationId})
+            `;
+          } catch (err) {
+            // webhook_events table might not exist, continue
+          }
+        } catch (error) {
+          console.error(`Error processing subscription.deleted event ${event.id}:`, error);
+          // Don't rethrow - return 200 to prevent Stripe retry, but log the error
         }
 
         break;

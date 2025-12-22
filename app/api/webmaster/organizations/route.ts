@@ -20,14 +20,15 @@ export async function GET() {
         os.status as subscription_status,
         sp.name as plan_name,
         sp.monthly_limit,
-        COALESCE(um.current_month_count, 0) as current_usage,
+        COALESCE(um.metric_value, 0) as current_usage,
         o.created_at
       FROM app.organizations o
       LEFT JOIN app.organization_subscriptions os ON o.id = os.organization_id
       LEFT JOIN app.subscription_plans sp ON os.plan_id = sp.id
-      LEFT JOIN app.usage_metrics um ON o.id = um.organization_id 
-        AND um.metric_name = 'case_created'
-        AND um.month_year = to_char(CURRENT_DATE, 'YYYY-MM')
+      LEFT JOIN app.usage_metrics um ON o.id = um.org_id 
+        AND um.metric_type = 'case_created'
+        AND um.billing_cycle_start <= CURRENT_DATE
+        AND um.billing_cycle_end >= CURRENT_DATE
       ORDER BY o.created_at DESC
     `;
 
@@ -75,8 +76,8 @@ export async function POST(request: Request) {
     }
 
     const result = await sql`
-      INSERT INTO app.organizations (name, email)
-      VALUES (${name}, ${email})
+      INSERT INTO app.organizations (name, email, firm_name, contact_email)
+      VALUES (${name}, ${email}, ${name}, ${email})
       RETURNING id, name, email, created_at
     `;
 

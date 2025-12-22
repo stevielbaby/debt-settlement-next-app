@@ -28,14 +28,15 @@ export async function GET(
         os.status as subscription_status,
         sp.name as plan_name,
         sp.monthly_limit,
-        COALESCE(um.current_month_count, 0) as current_usage,
+        COALESCE(um.metric_value, 0) as current_usage,
         o.created_at
       FROM app.organizations o
       LEFT JOIN app.organization_subscriptions os ON o.id = os.organization_id
       LEFT JOIN app.subscription_plans sp ON os.plan_id = sp.id
-      LEFT JOIN app.usage_metrics um ON o.id = um.organization_id 
-        AND um.metric_name = 'case_created'
-        AND um.month_year = to_char(CURRENT_DATE, 'YYYY-MM')
+      LEFT JOIN app.usage_metrics um ON o.id = um.org_id 
+        AND um.metric_type = 'case_created'
+        AND um.billing_cycle_start <= CURRENT_DATE
+        AND um.billing_cycle_end >= CURRENT_DATE
       WHERE o.id = ${id}
     `;
 
@@ -65,7 +66,7 @@ export async function GET(
     const usersResult = await sql`
       SELECT id, email, role, created_at
       FROM app.users
-      WHERE organization_id = ${id}
+      WHERE org_id = ${id}
       ORDER BY created_at DESC
     `;
 
@@ -111,8 +112,11 @@ export async function PATCH(
       UPDATE app.organizations
       SET name = COALESCE(${name}, name),
           email = COALESCE(${email}, email),
+          firm_name = COALESCE(${name}, firm_name),
+          contact_email = COALESCE(${email}, contact_email),
           contact_name = COALESCE(${contact_name}, contact_name),
           phone = COALESCE(${phone}, phone),
+          contact_phone = COALESCE(${phone}, contact_phone),
           address = COALESCE(${address}, address)
       WHERE id = ${id}
       RETURNING id, name, email, contact_name, phone, address, created_at
