@@ -15,7 +15,7 @@ export async function GET() {
     const masterKey = process.env.ENCRYPTION_KEY || 'default-master-key-change-in-production';
 
     // Try to get config from database
-    let result;
+    let result: any[] = [];
     try {
       result = await sql`
         SELECT * FROM setup_config WHERE tenant_id = 'default'
