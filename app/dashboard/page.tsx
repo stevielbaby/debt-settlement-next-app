@@ -6,6 +6,8 @@ import { Navbar } from '@/app/components/Navbar';
 import { UrgentBanner } from '@/app/components/UrgentBanner';
 import { PriorityDashboard } from '@/app/components/PriorityDashboard';
 
+export const dynamic = 'force-dynamic';
+
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();

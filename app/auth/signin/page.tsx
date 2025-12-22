@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Scale, Lock, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
