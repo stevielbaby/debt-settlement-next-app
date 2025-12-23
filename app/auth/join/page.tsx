@@ -11,14 +11,13 @@ export const dynamic = 'force-dynamic';
 function JoinContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const inviteCode = searchParams.get('code');
+  const urlInviteCode = searchParams.get('code');
   const formRef = useRef<HTMLFormElement>(null);
 
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [organizationName, setOrganizationName] = useState('');
+  const [inviteCode, setInviteCode] = useState(urlInviteCode || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [validatingCode, setValidatingCode] = useState(false);
@@ -29,10 +28,14 @@ function JoinContent() {
     name: string;
   } | null>(null);
 
-  // Validate invite code on mount
+  // Validate invite code when it changes
   useEffect(() => {
-    if (inviteCode) {
+    if (inviteCode && inviteCode.length > 0) {
       validateInviteCode(inviteCode);
+    } else {
+      setCodeValid(false);
+      setCodeError('');
+      setLinkedOrganization(null);
     }
   }, [inviteCode]);
 
@@ -47,7 +50,6 @@ function JoinContent() {
         setCodeValid(true);
         if (data.organization) {
           setLinkedOrganization(data.organization);
-          setOrganizationName(data.organization.name);
         }
       } else {
         setCodeError(data.error || 'Invalid or expired invite code');
@@ -66,13 +68,8 @@ function JoinContent() {
     setError('');
 
     // Validation
-    if (!email || !password) {
-      setError('Email and password are required');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
+    if (!email || !password || !inviteCode) {
+      setError('Email, password, and access code are required');
       return;
     }
 
@@ -81,8 +78,8 @@ function JoinContent() {
       return;
     }
 
-    if (!inviteCode && !organizationName) {
-      setError('Organization name is required when not using an invite code');
+    if (!codeValid) {
+      setError('Please enter a valid access code');
       return;
     }
 
@@ -97,8 +94,7 @@ function JoinContent() {
           email,
           password,
           role: 'operator',
-          inviteCode: inviteCode || undefined,
-          organizationName: !inviteCode ? organizationName : undefined,
+          inviteCode: inviteCode,
         }),
       });
 
@@ -172,6 +168,19 @@ function JoinContent() {
           </div>
         )}
 
+        {!inviteCode && (
+          <div className="mb-6 bg-orange-900/20 border border-orange-800 p-4 rounded flex items-start gap-3">
+            <AlertCircle size={16} className="text-orange-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-orange-400 text-sm font-bold mb-1">Invite Code Required</p>
+              <p className="text-orange-300 text-xs">
+                You need an invite code from your organization to create an account. 
+                Contact your webmaster or administrator to get your invite code.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -214,45 +223,38 @@ function JoinContent() {
             <p className="text-xs text-zinc-500 mt-1">Minimum 8 characters</p>
           </div>
 
-          {/* Confirm Password Field */}
+          {/* Access Code Field */}
           <div>
             <label className="block text-zinc-400 text-xs uppercase tracking-widest font-bold mb-2">
-              Confirm Password
+              Access Code
             </label>
             <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-orange-600 transition-colors"
+              type="text"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+              placeholder="ABC12XYZ"
+              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-orange-600 transition-colors font-mono tracking-wider text-center text-lg"
               disabled={loading}
+              maxLength={8}
             />
-          </div>
-
-          {/* Organization Name (conditionally shown) */}
-          {!inviteCode && (
-            <div>
-              <label className="block text-zinc-400 text-xs uppercase tracking-widest font-bold mb-2">
-                Organization Name
-              </label>
-              <input
-                type="text"
-                value={organizationName}
-                onChange={(e) => setOrganizationName(e.target.value)}
-                placeholder="Your Law Firm"
-                className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-orange-600 transition-colors"
-                disabled={loading}
-              />
-              <p className="text-xs text-zinc-500 mt-1">
-                You'll be able to link this to an existing organization later
+            {inviteCode && validatingCode && (
+              <p className="text-xs text-zinc-400 mt-1 flex items-center justify-center gap-1">
+                <RefreshCw size={12} className="animate-spin" />
+                Validating code...
               </p>
-            </div>
-          )}
+            )}
+            {inviteCode && !validatingCode && codeValid && linkedOrganization && (
+              <p className="text-xs text-green-400 mt-1 text-center">✓ Valid - joining {linkedOrganization.name}</p>
+            )}
+            {inviteCode && !validatingCode && codeError && (
+              <p className="text-xs text-red-400 mt-1 text-center">✗ {codeError}</p>
+            )}
+          </div>
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || validatingCode || (!!inviteCode && !codeValid)}
+            disabled={loading || validatingCode || !inviteCode || !codeValid}
             className="w-full px-4 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-600/50 text-white font-bold uppercase tracking-widest transition-colors mt-6"
           >
             {loading ? (
@@ -278,11 +280,11 @@ function JoinContent() {
 
         {/* Info Box */}
         <div className="mt-8 bg-zinc-900 border border-zinc-800 p-4 rounded text-xs text-zinc-400 space-y-2">
-          <p className="font-bold text-white">About This Page</p>
+          <p className="font-bold text-white">Need an Invite Code?</p>
           <p>
             {inviteCode
               ? 'You were invited to join an organization. Complete your account to get started.'
-              : 'Create an account as an operator. You can link to an organization later using an invite code.'}
+              : 'Contact your organization\'s webmaster or administrator to receive an invite code. You cannot create an account without one.'}
           </p>
         </div>
       </div>

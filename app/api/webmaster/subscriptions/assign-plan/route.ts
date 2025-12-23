@@ -13,12 +13,8 @@ import {
   createStripeProduct,
   createStripePrice,
 } from "@/lib/stripe";
-import {
-  getStripeCustomerId,
-  saveStripeSubscription,
-  getPlanStripePriceId,
-  savePlanStripeIds,
-} from "@/lib/stripe-db";
+import { saveStripeSubscription, getPlanStripePriceId, savePlanStripeIds } from "@/lib/stripe-db";
+import { ensureStripeCustomerForOrganization } from "@/lib/billing";
 import { sql } from "@/app/lib/db";
 
 export async function POST(request: Request) {
@@ -90,23 +86,8 @@ export async function POST(request: Request) {
 
     const plan = planResult[0];
 
-    // Get or create Stripe customer
-    let stripeCustomerId = org.stripe_customer_id;
-    if (!stripeCustomerId) {
-      const customer = await getOrCreateStripeCustomer(
-        organizationId,
-        org.email,
-        org.name
-      );
-      stripeCustomerId = customer.id;
-
-      // Save customer ID
-      await sql`
-        UPDATE app.organizations
-        SET stripe_customer_id = ${stripeCustomerId}
-        WHERE id = ${organizationId}
-      `;
-    }
+    // Ensure Stripe customer exists (race-safe) via helper
+    const stripeCustomerId = await ensureStripeCustomerForOrganization(organizationId);
 
     // Ensure plan has Stripe product/price; auto-provision if missing
     let stripePriceId = plan.stripe_price_id as string | null;
@@ -175,7 +156,8 @@ export async function POST(request: Request) {
       planId,
       status,
       periodStart,
-      periodEnd
+      periodEnd,
+      "month" // Default to monthly when webmaster assigns a plan
     );
 
     return NextResponse.json({

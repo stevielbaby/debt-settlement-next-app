@@ -1,12 +1,14 @@
-`'use client';
+'use client';
 
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, CreditCard, AlertCircle, CheckCircle } from 'lucide-react';
+import { RefreshCw, CreditCard, AlertCircle, CheckCircle, Plus, ArrowRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface SubscriptionInfo {
   planName: string;
   status: string;
   amount: number;
+  billingPeriod?: string;
   currentPeriodStart: string;
   currentPeriodEnd: string;
   daysUntilRenewal: number;
@@ -25,6 +27,7 @@ interface InvoiceInfo {
 }
 
 export default function OperatorPaymentsPage() {
+  const router = useRouter();
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [invoices, setInvoices] = useState<InvoiceInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,7 +138,18 @@ export default function OperatorPaymentsPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 border-t border-zinc-800 pt-6">
               <div>
                 <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-2">Monthly Cost</p>
-                <p className="text-3xl font-serif font-bold text-white">${subscription.amount}</p>
+                <p className="text-3xl font-serif font-bold text-white">
+                  ${subscription.amount}
+                  <span className="text-sm font-normal text-zinc-400">
+                    /{subscription.billingPeriod === 'year' ? 'year' : 'month'}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-2">Billing Period</p>
+                <p className="text-lg font-serif font-bold text-white capitalize">
+                  {subscription.billingPeriod === 'year' ? 'Yearly' : 'Monthly'}
+                </p>
               </div>
               <div>
                 <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-2">Case Limit</p>
@@ -152,10 +166,6 @@ export default function OperatorPaymentsPage() {
                 }`}>
                   {subscription.currentUsage}
                 </p>
-              </div>
-              <div>
-                <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-2">Renewal In</p>
-                <p className="text-3xl font-serif font-bold text-white">{subscription.daysUntilRenewal}d</p>
               </div>
             </div>
 
@@ -275,8 +285,19 @@ export default function OperatorPaymentsPage() {
           </div>
         </>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 p-12 text-center">
-          <p className="text-zinc-500">No subscription found. Please contact your administrator.</p>
+        <div className="bg-zinc-900 border border-zinc-800 p-12 text-center space-y-6">
+          <div className="space-y-2">
+            <p className="text-zinc-300 text-lg font-semibold">No subscription found</p>
+            <p className="text-zinc-500">Subscribe to a plan to start using the platform.</p>
+          </div>
+          <button
+            onClick={() => router.push('/operator/billing/select-plan')}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 font-bold uppercase tracking-widest transition-all rounded"
+          >
+            <Plus size={18} />
+            Choose a Plan
+            <ArrowRight size={18} />
+          </button>
         </div>
       )}
     </div>

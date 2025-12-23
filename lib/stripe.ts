@@ -33,6 +33,8 @@ export async function createStripeCustomer(
       name: organizationName,
       metadata: {
         organization_id: organizationId,
+        organization_name: organizationName,
+        organization_email: organizationEmail,
         ...metadata,
       },
     });
@@ -60,6 +62,29 @@ export async function getOrCreateStripeCustomer(
 
     if (customers.data.length > 0) {
       return customers.data[0];
+    }
+
+    // Fallback: attempt lookup by email to dedupe legacy customers
+    if (organizationEmail) {
+      const byEmail = await stripe.customers.search({
+        query: `email:'${organizationEmail}'`,
+      });
+      if (byEmail.data.length > 0) {
+        // Ensure org metadata is present for webhooks
+        try {
+          await stripe.customers.update(byEmail.data[0].id, {
+            metadata: {
+              ...(byEmail.data[0].metadata || {}),
+              organization_id: organizationId,
+              organization_name: organizationName,
+              organization_email: organizationEmail,
+            },
+          });
+        } catch (e) {
+          console.warn("Could not backfill customer metadata for org linkage:", e);
+        }
+        return byEmail.data[0];
+      }
     }
 
     // Create new customer if not found
@@ -132,20 +157,44 @@ export async function cancelSubscription(
   immediate: boolean = false
 ) {
   try {
-    const subscription = await stripe.subscriptions.update(
+    console.log("[cancelSubscription] Starting cancellation:", {
       subscriptionId,
-      {
-        cancel_at_period_end: !immediate,
-      }
-    );
+      immediate,
+    });
 
     if (immediate) {
-      await stripe.subscriptions.cancel(subscriptionId);
+      // For immediate cancellation, call .cancel() directly
+      console.log("[cancelSubscription] Calling stripe.subscriptions.cancel()");
+      const subscription = await stripe.subscriptions.cancel(subscriptionId);
+      console.log("[cancelSubscription] Immediate cancellation succeeded:", {
+        id: subscription.id,
+        status: subscription.status,
+        canceled_at: subscription.canceled_at,
+      });
+      return subscription;
+    } else {
+      // For delayed cancellation (end of period), use .update()
+      console.log("[cancelSubscription] Calling stripe.subscriptions.update() with cancel_at_period_end");
+      const subscription = await stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: true,
+      });
+      console.log("[cancelSubscription] Delayed cancellation scheduled:", {
+        id: subscription.id,
+        status: subscription.status,
+        cancel_at_period_end: subscription.cancel_at_period_end,
+      });
+      return subscription;
     }
-
-    return subscription;
-  } catch (error) {
-    console.error("Error canceling subscription:", error);
+  } catch (error: any) {
+    console.error("[cancelSubscription] Error canceling subscription:", {
+      subscriptionId,
+      immediate,
+      message: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      type: error.type,
+      fullError: error,
+    });
     throw error;
   }
 }

@@ -186,7 +186,18 @@ function SignInContent() {
           )}
         </form>
 
-        <div className="text-center">
+        {/* Sign Up Link */}
+        <div className="text-center mt-6">
+          <p className="text-zinc-500 text-sm">
+            Don't have an account?{' '}
+            <Link href="/auth/join" className="text-orange-600 hover:text-orange-400 font-bold">
+              Sign Up
+            </Link>
+          </p>
+          <p className="text-zinc-600 text-xs mt-1">You'll need an invite code from your organization</p>
+        </div>
+
+        <div className="text-center mt-4">
           <Link href="/" className="text-zinc-500 hover:text-white text-xs uppercase tracking-widest transition-colors">
             ← Return to Public Site
           </Link>

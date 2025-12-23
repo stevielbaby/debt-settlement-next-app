@@ -10,7 +10,7 @@ import { sql } from '@/app/lib/db';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, role, inviteCode, organizationName } = body;
+    const { email, password, role, inviteCode } = body;
 
     // Validation
     if (!email || !password) {
@@ -27,16 +27,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (inviteCode && organizationName) {
+    if (!inviteCode) {
       return NextResponse.json(
-        { error: 'Cannot specify both invite code and organization name' },
-        { status: 400 }
-      );
-    }
-
-    if (!inviteCode && !organizationName) {
-      return NextResponse.json(
-        { error: 'Must provide either invite code or organization name' },
+        { error: 'An invite code is required to create an account' },
         { status: 400 }
       );
     }
@@ -55,41 +48,32 @@ export async function POST(request: NextRequest) {
 
     let organizationId: string | null = null;
 
-    // If invite code provided, validate and get organization
-    if (inviteCode) {
-      const orgResult = await sql`
-        SELECT id FROM app.organizations 
-        WHERE UPPER(invite_code) = UPPER(${inviteCode})
-      `;
+    // Validate and get organization from invite code
+    const orgResult = await sql`
+      SELECT id FROM app.organizations 
+      WHERE UPPER(invite_code) = UPPER(${inviteCode})
+    `;
 
-      if (orgResult.length === 0) {
-        return NextResponse.json(
-          { error: 'Invalid or expired invite code' },
-          { status: 400 }
-        );
-      }
-
-      organizationId = orgResult[0].id;
-    } else {
-      // Create new organization
-      const createOrgResult = await sql`
-        INSERT INTO app.organizations 
-        (name, email, created_at)
-        VALUES (${organizationName}, ${email}, NOW())
-        RETURNING id
-      `;
-
-      organizationId = createOrgResult[0].id;
+    if (orgResult.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid or expired invite code' },
+        { status: 400 }
+      );
     }
+
+    organizationId = orgResult[0].id;
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Extract name from email (everything before @)
+    const nameFromEmail = email.split('@')[0];
+
     // Create user
     const createUserResult = await sql`
       INSERT INTO app.users 
-      (email, password_hash, role, org_id, status, created_at)
-      VALUES (${email}, ${hashedPassword}, ${role || 'operator'}, ${organizationId}, 'active', NOW())
+      (email, password_hash, name, role, org_id, status, created_at)
+      VALUES (${email}, ${hashedPassword}, ${nameFromEmail}, ${role || 'operator'}, ${organizationId}, 'active', NOW())
       RETURNING id, email, role, org_id
     `;
 

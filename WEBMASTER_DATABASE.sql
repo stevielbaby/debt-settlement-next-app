@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS app.organization_subscriptions (
   organization_id UUID NOT NULL REFERENCES app.organizations(id),
   plan_id UUID NOT NULL REFERENCES app.subscription_plans(id),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'trialing', 'past_due', 'canceled')),
+  cancel_at_period_end BOOLEAN DEFAULT false,  -- Whether subscription will cancel at end of current period
   current_period_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   current_period_end TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days'),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

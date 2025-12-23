@@ -20,6 +20,7 @@ export async function GET() {
         os.plan_id,
         sp.name as plan_name,
         os.status,
+        os.cancel_at_period_end,
         os.current_period_start,
         os.current_period_end
       FROM app.organization_subscriptions os
@@ -35,6 +36,7 @@ export async function GET() {
       plan_id: row.plan_id,
       plan_name: row.plan_name,
       status: row.status,
+      cancel_at_period_end: row.cancel_at_period_end,
       current_period_start: row.current_period_start,
       current_period_end: row.current_period_end,
     }));
