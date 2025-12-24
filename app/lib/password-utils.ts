@@ -14,8 +14,8 @@ export function hashPassword(password: string): string {
  */
 export function verifyPassword(password: string, hash: string): boolean {
   const passwordHash = hashPassword(password);
-  return crypto.timingSafeEqual(
-    Buffer.from(passwordHash),
-    Buffer.from(hash)
-  );
+  const a = Buffer.from(passwordHash);
+  const b = Buffer.from(hash);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }

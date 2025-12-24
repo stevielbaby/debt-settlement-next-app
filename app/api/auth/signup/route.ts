@@ -6,6 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { sql } from '@/app/lib/db';
+import { ensureCustomer } from '@/packages/billing-kit/src/api/ensure-customer';
+import type { AuthAdapter } from '@/packages/billing-kit/src/adapters/auth-adapter';
+import { dbAdapter } from '@/lib/billing/db-adapter';
+  import { getBillingConfig } from '@/lib/billing/config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,6 +82,38 @@ export async function POST(request: NextRequest) {
     `;
 
     const user = createUserResult[0];
+
+    // 🔥 Create billing account for new user
+    try {
+      const config = getBillingConfig();
+
+      // Minimal AuthAdapter bound to the newly created user (no session required)
+      const signupAuthAdapter: AuthAdapter = {
+        async getCurrentUser() {
+          return {
+            id: user.id,
+            email: user.email,
+            name: nameFromEmail,
+          };
+        },
+        async requireUser() {
+          return {
+            id: user.id,
+            email: user.email,
+            name: nameFromEmail,
+          };
+        },
+        async isAdmin() {
+          return false;
+        },
+      };
+
+      await ensureCustomer({ authAdapter: signupAuthAdapter, dbAdapter, config });
+      console.log(`[billing] Created Stripe customer for user ${user.id}`);
+    } catch (error) {
+      console.warn(`[billing] Failed to create Stripe customer for user ${user.id}:`, error);
+      // Don't fail signup - user can still use app, just won't be able to subscribe yet
+    }
 
     return NextResponse.json(
       {

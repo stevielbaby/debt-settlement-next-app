@@ -11,14 +11,21 @@ export async function GET() {
   try {
     const session = await auth();
 
-    if (!session?.user || !session.user.orgId) {
+    if (!session?.user) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const organizationId = session.user.orgId;
+    // Get organization_id from session (could be orgId or organization_id)
+    const organizationId = (session.user as any).organization_id || (session.user as any).orgId;
+    if (!organizationId) {
+      return NextResponse.json(
+        { success: false, error: "No organization assigned" },
+        { status: 400 }
+      );
+    }
 
     // Get subscription info
     const subResult = await sql`

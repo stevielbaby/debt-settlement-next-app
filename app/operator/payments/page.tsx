@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, CreditCard, AlertCircle, CheckCircle, Plus, ArrowRight } from 'lucide-react';
+import { RefreshCw, CreditCard, AlertCircle, CheckCircle, Plus, ArrowRight, XCircle, ExternalLink, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface SubscriptionInfo {
@@ -32,6 +32,12 @@ export default function OperatorPaymentsPage() {
   const [invoices, setInvoices] = useState<InvoiceInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [cancelImmediate, setCancelImmediate] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [confirmText, setConfirmText] = useState('');
+  const [openingPortal, setOpeningPortal] = useState(false);
 
   useEffect(() => {
     fetchPaymentInfo();
@@ -82,6 +88,67 @@ export default function OperatorPaymentsPage() {
         return 'text-red-500 bg-red-900/20';
       default:
         return 'text-zinc-500 bg-zinc-900/20';
+    }
+  };
+
+  const handleOpenPortal = async () => {
+    try {
+      setOpeningPortal(true);
+      const response = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          return_url: `${window.location.origin}/operator/payments`,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error || 'Failed to open billing portal');
+      }
+    } catch (err) {
+      setError('Failed to open billing portal');
+      console.error(err);
+    } finally {
+      setOpeningPortal(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (confirmText !== 'CANCEL') {
+      setCancelError('Please type CANCEL to confirm');
+      return;
+    }
+
+    try {
+      setCanceling(true);
+      setCancelError('');
+
+      const response = await fetch('/api/operator/billing/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          immediate: cancelImmediate,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setShowCancelModal(false);
+        setConfirmText('');
+        setCancelImmediate(false);
+        fetchPaymentInfo(); // Refresh subscription status
+      } else {
+        setCancelError(data.error || 'Failed to cancel subscription');
+      }
+    } catch (err) {
+      setCancelError('Failed to cancel subscription');
+      console.error(err);
+    } finally {
+      setCanceling(false);
     }
   };
 
@@ -223,6 +290,35 @@ export default function OperatorPaymentsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Management Actions */}
+            <div className="border-t border-zinc-800 pt-6 flex items-center gap-4">
+              <button
+                onClick={() => setShowCancelModal(true)}
+                disabled={subscription.status === 'canceled'}
+                className="flex items-center gap-2 px-4 py-2 border border-red-700 text-red-500 hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-widest transition-all"
+              >
+                <XCircle size={14} />
+                Cancel Subscription
+              </button>
+              <button
+                onClick={handleOpenPortal}
+                disabled={openingPortal}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 text-xs font-bold uppercase tracking-widest transition-all"
+              >
+                {openingPortal ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Opening...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink size={14} />
+                    Manage in Stripe Portal
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Invoices Section */}
@@ -298,6 +394,123 @@ export default function OperatorPaymentsPage() {
             Choose a Plan
             <ArrowRight size={18} />
           </button>
+        </div>
+      )}
+
+      {/* Cancel Subscription Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-serif font-bold text-white uppercase tracking-tight">
+                Cancel Subscription
+              </h3>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelError('');
+                  setConfirmText('');
+                  setCancelImmediate(false);
+                }}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="bg-red-900/20 border border-red-800 p-4 space-y-2">
+              <div className="flex items-start gap-2">
+                <XCircle className="text-red-500 shrink-0" size={20} />
+                <div>
+                  <p className="text-red-400 text-sm font-bold">Warning: This action cannot be undone</p>
+                  <p className="text-red-400/80 text-xs mt-1">
+                    Canceling this subscription will affect your access to the platform.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {cancelError && (
+              <div className="bg-red-900/20 border border-red-800 p-4 text-red-400 text-sm">
+                {cancelError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">
+                Cancellation Type
+              </label>
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="cancelType"
+                    checked={!cancelImmediate}
+                    onChange={() => setCancelImmediate(false)}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="text-white font-semibold text-sm">Cancel at period end (Recommended)</div>
+                    <div className="text-zinc-500 text-xs mt-1">
+                      You'll retain access until the end of current billing period
+                    </div>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="cancelType"
+                    checked={cancelImmediate}
+                    onChange={() => setCancelImmediate(true)}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="text-white font-semibold text-sm">Cancel immediately</div>
+                    <div className="text-zinc-500 text-xs mt-1">
+                      You'll lose access immediately (no refund)
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">
+                Type CANCEL to confirm *
+              </label>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="Type CANCEL"
+                className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-red-600 transition-colors font-mono"
+              />
+              {confirmText && confirmText !== 'CANCEL' && (
+                <p className="text-red-500 text-xs mt-2">Must type exactly: CANCEL</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 pt-4">
+              <button
+                onClick={handleCancelSubscription}
+                disabled={canceling || confirmText !== 'CANCEL'}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white px-6 py-3 font-bold uppercase tracking-wider text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {canceling ? 'Canceling...' : 'Confirm Cancellation'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelError('');
+                  setConfirmText('');
+                  setCancelImmediate(false);
+                }}
+                className="px-6 py-3 border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 font-bold uppercase tracking-wider text-xs transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

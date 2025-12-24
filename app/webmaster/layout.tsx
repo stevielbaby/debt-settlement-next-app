@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Settings, Users, CreditCard, BarChart3, LogOut } from 'lucide-react';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
+import WebmasterHeader from '../components/WebmasterHeader';
 
 export default async function WebmasterLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -89,6 +90,7 @@ export default async function WebmasterLayout({ children }: { children: React.Re
               <h1 className="text-2xl font-serif font-bold text-white">Webmaster Control</h1>
               <p className="text-xs text-zinc-500 uppercase tracking-widest mt-1">Multi-Tenant Management</p>
             </div>
+            <WebmasterHeader />
           </div>
         </div>
 

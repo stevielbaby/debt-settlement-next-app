@@ -13,6 +13,7 @@ import {
   markWebhookProcessed,
   isWebhookProcessed,
   logBillingEvent,
+  createOperatorSubscriptionNotification,
 } from "@/lib/stripe-db";
 import { sql } from "@/app/lib/db";
 
@@ -269,6 +270,69 @@ export async function POST(request: Request) {
         console.log(`Payment intent failed: ${paymentIntent.id}`);
 
         // Handle payment failure
+        break;
+      }
+
+      case "checkout.session.completed": {
+        const session = event.data.object as any;
+        console.log(`Checkout session completed: ${session.id}`);
+
+        // Only handle subscription mode
+        if (session.mode !== 'subscription') {
+          break;
+        }
+
+        try {
+          const organizationId = session.metadata?.organization_id;
+          const planId = session.metadata?.plan_id;
+          const billingPeriod = session.metadata?.billing_period || 'month';
+
+          if (!organizationId || !planId) {
+            console.error('Checkout session missing organization_id or plan_id metadata');
+            break;
+          }
+
+          // Get subscription details from Stripe
+          const subscription = await stripe.subscriptions.retrieve(session.subscription as string) as any;
+          const priceId = subscription.items.data[0]?.price.id;
+
+          const periodStart = new Date(subscription.current_period_start * 1000);
+          const periodEnd = new Date(subscription.current_period_end * 1000);
+
+          // Save to app.organization_subscriptions
+          await saveStripeSubscription(
+            organizationId,
+            subscription.id,
+            priceId,
+            planId,
+            subscription.status,
+            periodStart,
+            periodEnd,
+            billingPeriod as "month" | "year"
+          );
+
+          console.log(`Created subscription record for org ${organizationId}`);
+
+          // Create notification for webmaster
+          await createOperatorSubscriptionNotification(
+            organizationId,
+            planId,
+            subscription.id,
+            event.id
+          );
+
+          // Log event
+          await logBillingEvent(organizationId, "subscription.created", event.id, {
+            subscriptionId: subscription.id,
+            planId,
+            billingPeriod,
+          });
+
+        } catch (error) {
+          console.error('Error processing checkout.session.completed:', error);
+          // Don't throw - return 200 to prevent Stripe retry
+        }
+
         break;
       }
 

@@ -19,6 +19,13 @@ RUN npm run postinstall
 
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
+# Provide dummy values for build-time env vars (real values injected at runtime)
+ENV DATABASE_URL="postgresql://placeholder:placeholder@placeholder:5432/placeholder"
+ENV NEXTAUTH_SECRET="build-time-placeholder-secret-min-32-chars-long-for-validation"
+ENV NEXTAUTH_URL="http://localhost:3000"
+ENV STRIPE_SECRET_KEY="sk_test_placeholder"
+ENV STRIPE_PUBLIC_KEY="pk_test_placeholder"
+ENV STRIPE_WEBHOOK_SECRET="whsec_placeholder"
 
 # Build the application
 RUN npm run build
@@ -46,6 +53,7 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 CMD ["node", "server.js"]
+
 
 
 

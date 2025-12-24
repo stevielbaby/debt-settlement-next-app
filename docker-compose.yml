@@ -14,4 +14,24 @@ services:
       - .env.local
     command: sh -c "npm install && npm run postinstall && npm run dev"
     restart: unless-stopped
+    networks:
+      - app-network
+
+  stripe-cli:
+    image: stripe/stripe-cli:latest
+    command: listen --forward-to app:3000/api/stripe/webhook --skip-verify
+    environment:
+      - STRIPE_API_KEY=${STRIPE_SECRET_KEY}
+    env_file:
+      - .env.local
+    depends_on:
+      - app
+    networks:
+      - app-network
+    profiles:
+      - stripe # Only start when explicitly requested
+
+networks:
+  app-network:
+    driver: bridge
 

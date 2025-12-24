@@ -30,7 +30,6 @@ export default function SelectPlanPage() {
 
   const fetchPlans = async () => {
     try {
-      setLoading(true);
       setError('');
       const response = await fetch('/api/operator/billing/assigned-plans');
       const data = await response.json();
@@ -115,7 +114,7 @@ export default function SelectPlanPage() {
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-slate-900 mb-4">Choose Your Plan</h1>
           <p className="text-lg text-slate-600 mb-8">
-            Select the perfect plan for your debt settlement practice
+            Select a subscription plan for your debt settlement practice
           </p>
 
           {/* Billing Period Toggle */}
@@ -149,7 +148,15 @@ export default function SelectPlanPage() {
         {/* Error Message */}
         {error && (
           <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700 font-medium">{error}</p>
+            <p className="text-red-700 font-medium">Error: {error}</p>
+            <div className="mt-3 text-sm text-red-600">
+              <p><strong>Troubleshooting:</strong></p>
+              <ul className="mt-1 space-y-1">
+                <li>• If "Unauthorized" - Try refreshing the page or signing in again</li>
+                <li>• If network error - Check browser console for details</li>
+                <li>• If you have an active subscription, you should be redirected automatically</li>
+              </ul>
+            </div>
           </div>
         )}
 

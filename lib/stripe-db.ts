@@ -550,3 +550,53 @@ export async function updateSubscriptionBillingPeriod(
     throw error;
   }
 }
+
+/**
+ * Create notification for webmaster when operator subscribes
+ */
+export async function createOperatorSubscriptionNotification(
+  organizationId: string,
+  planId: string,
+  stripeSubscriptionId: string,
+  stripeEventId: string
+) {
+  try {
+    // Get organization and plan details
+    const orgResult = await sql`
+      SELECT name, email FROM app.organizations WHERE id = ${organizationId} LIMIT 1
+    `;
+    const planResult = await sql`
+      SELECT name, price FROM app.subscription_plans WHERE id = ${planId} LIMIT 1
+    `;
+
+    const orgName = orgResult[0]?.name || 'Unknown Organization';
+    const orgEmail = orgResult[0]?.email || '';
+    const planName = planResult[0]?.name || 'Unknown Plan';
+    const planPrice = planResult[0]?.price || 0;
+
+    // Create notification
+    await sql`
+      INSERT INTO notifications (type, title, message, data)
+      VALUES (
+        'operator_subscribed',
+        'New Operator Subscription',
+        ${`${orgName} has subscribed to ${planName}`},
+        ${JSON.stringify({
+          organization_id: organizationId,
+          organization_name: orgName,
+          organization_email: orgEmail,
+          plan_id: planId,
+          plan_name: planName,
+          plan_price: planPrice,
+          stripe_subscription_id: stripeSubscriptionId,
+          stripe_event_id: stripeEventId,
+        })}
+      )
+    `;
+
+    console.log(`Created notification: ${orgName} subscribed to ${planName}`);
+  } catch (error) {
+    console.error('Error creating subscription notification:', error);
+    // Don't throw - notification failure shouldn't break subscription
+  }
+}
