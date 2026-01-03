@@ -2,65 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { RefreshCw, CreditCard, Database, Users, FileText, Info, DollarSign, TrendingUp } from 'lucide-react';
+import { BillingResponseSchema, BillingResponse, BillingMetrics, Subscription, Invoice, UsageMetric, UsageResponseSchema, UsageResponse } from '@/lib/schemas';
 
-interface BillingMetrics {
-  totalRevenue: number;
-  monthlyRecurringRevenue: number;
-  averageContractValue: number;
-  churnRate: number;
-  paymentsProcessed: number;
-  paymentsOverdue: number;
-}
-
-interface UsageMetrics {
-  cases: {
-    total: number;
-    active: number;
-    closed: number;
-  };
-  documents: {
-    total: number;
-    totalSizeBytes: number;
-    averageSizeBytes: number;
-  };
-  users: {
-    total: number;
-    active: number;
-  };
-  leads: {
-    total: number;
-    converted: number;
-  };
-}
-
-interface UsageMetric {
-  organization_name: string;
-  metric_name: string;
-  current_month_count: number;
-  monthly_limit: number;
-  usage_percentage: number;
-}
-
-interface Invoice {
-  id: string;
-  organization_name: string;
-  amount: number;
-  status: string;
-  issue_date: string;
-  due_date: string;
-  paid_date?: string;
-}
-
-interface Subscription {
-  id: string;
-  organization_name: string;
-  plan_name: string;
-  amount: number;
-  status: string;
-  current_period_start?: string;
-  current_period_end?: string;
-  cancel_at_period_end: boolean;
-}
+// Removed duplicate interfaces - now imported from schemas
 
 export default function BillingPage() {
   const [billingMetrics, setBillingMetrics] = useState<BillingMetrics | null>(null);
@@ -73,28 +17,126 @@ export default function BillingPage() {
   const [cancelType, setCancelType] = useState<'immediate' | 'end_of_period'>('end_of_period');
 
   useEffect(() => {
-    fetchData();
+    // Add a small delay to ensure session is established
+    const timer = setTimeout(() => {
+      console.log('🚀 Initial fetchData call');
+      fetchData();
+    }, 500);
+    return () => clearTimeout(timer);
   }, []);
+
+  // Debug subscriptions state changes
+  useEffect(() => {
+    console.log('🔄 Subscriptions state changed:', subscriptions);
+    console.log('🔄 Subscriptions length:', subscriptions.length);
+  }, [subscriptions]);
+
+  useEffect(() => {
+    // #region agent log - billing page data update
+    fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'app/webmaster/billing/page.tsx:data-update',
+        message: 'Billing page received data update',
+        data: {
+          subscriptionsCount: subscriptions.length,
+          firstSubscription: subscriptions[0] ? {
+            id: subscriptions[0].id,
+            organization_name: subscriptions[0].organization_name,
+            plan_name: subscriptions[0].plan_name,
+            status: subscriptions[0].status
+          } : null,
+          metrics: {
+            totalRevenue: billingMetrics?.totalRevenue || 0,
+            monthlyRecurringRevenue: billingMetrics?.monthlyRecurringRevenue || 0,
+            activeSubscriptions: billingMetrics?.activeSubscriptions || 0
+          }
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'frontend-debug',
+        hypothesisId: 'FE1,FE2,FE3'
+      })
+    }).catch(() => {});
+    // #endregion
+    }, [subscriptions, billingMetrics]);
 
   const fetchData = async () => {
     try {
+      console.log('🔄 Starting fetchData...');
       setLoading(true);
 
       // Fetch billing data (may return honest zeros)
-      const billingResponse = await fetch('/api/webmaster/billing');
-      const billingData = await billingResponse.json();
+      let billingData: BillingResponse | null = null;
+      try {
+        console.log('🔍 Fetching billing data...');
+        const billingResponse = await fetch('/api/webmaster/billing', {
+          credentials: 'include'
+        });
+        console.log('📡 Billing response status:', billingResponse.status);
+        console.log('📡 Billing response ok:', billingResponse.ok);
+
+        if (!billingResponse.ok) {
+          console.error('❌ Billing API returned error status:', billingResponse.status);
+          const errorText = await billingResponse.text();
+          console.error('❌ Billing API error response:', errorText);
+          return;
+        }
+
+        const rawBillingData = await billingResponse.json();
+
+        console.log('📦 Billing API raw response:', rawBillingData);
+        console.log('✅ Billing API success:', rawBillingData?.success);
+        console.log('📊 Billing API subscriptions:', rawBillingData?.subscriptions);
+        console.log('🔢 Billing API subscriptions length:', rawBillingData?.subscriptions?.length);
+
+        // Validate billing response with Zod (with fallback)
+        try {
+          billingData = BillingResponseSchema.parse(rawBillingData);
+          console.log('✅ Zod validation passed');
+        } catch (zodError) {
+          console.warn('⚠️ Billing Zod validation failed, using raw data:', zodError);
+          billingData = rawBillingData as BillingResponse;
+          console.log('🔄 Using raw data fallback');
+        }
+      } catch (billingError) {
+        console.error('❌ Failed to fetch billing data:', billingError);
+      }
 
       // Fetch usage data (real metrics from database)
-      const usageResponse = await fetch('/api/webmaster/usage');
-      const usageData = await usageResponse.json();
+      let usageData: any = null;
+      try {
+        const usageResponse = await fetch('/api/webmaster/usage', {
+          credentials: 'include'
+        });
+        const rawUsageData = await usageResponse.json();
 
-      if (billingData.success) {
+        // Validate usage response with Zod (with fallback)
+        try {
+          usageData = UsageResponseSchema.parse(rawUsageData);
+        } catch (usageZodError) {
+          console.warn('Usage Zod validation failed, using raw data:', usageZodError);
+          usageData = rawUsageData;
+        }
+      } catch (usageError) {
+        console.error('Failed to fetch usage data:', usageError);
+      }
+
+      // Set billing data if available
+      if (billingData?.success) {
+        console.log('💾 Setting subscriptions state:', billingData.subscriptions);
+        console.log('💾 Subscriptions array:', billingData.subscriptions || []);
         setBillingMetrics(billingData.metrics);
         setInvoices(billingData.invoices || []);
         setSubscriptions(billingData.subscriptions || []);
+      } else {
+        console.error('❌ Billing data not successful:', billingData);
+        console.error('❌ Billing data success value:', billingData?.success);
       }
 
-      if (usageData.success) {
+      // Set usage data if available
+      if (usageData?.success) {
         setUsageMetrics(usageData.metrics || []);
       }
     } catch (error) {
@@ -140,6 +182,55 @@ export default function BillingPage() {
         </div>
       ) : (
         <>
+          {/* Revenue Overview Section */}
+          {billingMetrics && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-zinc-900 border border-zinc-800 p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign className="text-green-500" size={20} />
+                  <p className="text-zinc-400 text-sm uppercase tracking-widest font-bold">Monthly Revenue</p>
+                </div>
+                <p className="text-3xl font-serif font-bold text-white">
+                  ${billingMetrics.monthlyRecurringRevenue.toFixed(2)}
+                </p>
+                <p className="text-xs text-zinc-500 mt-1">Recurring revenue</p>
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign className="text-blue-500" size={20} />
+                  <p className="text-zinc-400 text-sm uppercase tracking-widest font-bold">Total Revenue</p>
+                </div>
+                <p className="text-3xl font-serif font-bold text-white">
+                  ${billingMetrics.totalRevenue.toFixed(2)}
+                </p>
+                <p className="text-xs text-zinc-500 mt-1">All time paid</p>
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingUp className="text-orange-500" size={20} />
+                  <p className="text-zinc-400 text-sm uppercase tracking-widest font-bold">Avg Contract Value</p>
+                </div>
+                <p className="text-3xl font-serif font-bold text-white">
+                  ${billingMetrics.averageContractValue.toFixed(2)}
+                </p>
+                <p className="text-xs text-zinc-500 mt-1">Per subscription</p>
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingUp className="text-red-500" size={20} />
+                  <p className="text-zinc-400 text-sm uppercase tracking-widest font-bold">Churn Rate</p>
+                </div>
+                <p className="text-3xl font-serif font-bold text-white">
+                  {billingMetrics.churnRate.toFixed(1)}%
+                </p>
+                <p className="text-xs text-zinc-500 mt-1">This month</p>
+              </div>
+            </div>
+          )}
+
           {/* Subscription Status Section */}
           <div className="bg-zinc-900 border border-zinc-800 p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -147,8 +238,14 @@ export default function BillingPage() {
               <h3 className="text-lg font-semibold text-white">Active Subscriptions</h3>
             </div>
 
-            {subscriptions.length > 0 ? (
-              <div className="space-y-4">
+            {(() => {
+              console.log('🎯 Rendering subscriptions check');
+              console.log('📊 Current subscriptions state:', subscriptions);
+              console.log('🔢 Subscriptions length:', subscriptions.length);
+              console.log('❓ Length > 0 check:', subscriptions.length > 0);
+              return subscriptions.length > 0;
+            })() ? (
+              <div key={`subs-${subscriptions.length}-${Date.now()}`} className="space-y-4">
                 {subscriptions.map((subscription) => (
                   <div key={subscription.id} className="bg-zinc-800 p-4 rounded border border-zinc-700">
                     <div className="flex items-center justify-between">
@@ -177,30 +274,54 @@ export default function BillingPage() {
                       </div>
                     )}
 
-                    {!subscription.cancel_at_period_end && (
-                      <div className="flex gap-2 mt-4">
+                    <div className="flex gap-2 mt-4">
+                      {!subscription.cancel_at_period_end && (
                         <button
                           onClick={() => {
                             setShowCancelDialog(subscription);
                             setCancelType('end_of_period');
                           }}
                           className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
-                          disabled={cancelLoading === subscription.id}
+                          disabled={cancelLoading === subscription.stripeSubscriptionId}
                         >
                           Cancel at Period End
                         </button>
-                        <button
-                          onClick={() => {
-                            setShowCancelDialog(subscription);
-                            setCancelType('immediate');
-                          }}
-                          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
-                          disabled={cancelLoading === subscription.id}
-                        >
-                          Cancel Immediately
-                        </button>
-                      </div>
-                    )}
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Are you sure you want to cancel this subscription immediately? The organization will lose access right away.`)) {
+                            try {
+                              setCancelLoading(subscription.stripeSubscriptionId);
+                              const response = await fetch('/api/webmaster/billing/cancel', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  subscriptionId: subscription.stripeSubscriptionId,
+                                  cancelType: 'immediate'
+                                })
+                              });
+
+                              const data = await response.json();
+
+                              if (data.success) {
+                                fetchData(); // Refresh data
+                              } else {
+                                alert(`Error: ${data.error || 'Failed to cancel subscription'}`);
+                              }
+                            } catch (error) {
+                              console.error('Cancel error:', error);
+                              alert('Failed to cancel subscription. Please try again.');
+                            } finally {
+                              setCancelLoading(null);
+                            }
+                          }
+                        }}
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
+                        disabled={cancelLoading === subscription.stripeSubscriptionId}
+                      >
+                        {cancelLoading === subscription.stripeSubscriptionId ? 'Cancelling...' : 'Cancel Immediately'}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -471,12 +592,12 @@ export default function BillingPage() {
               <button
                 onClick={async () => {
                   try {
-                    setCancelLoading(showCancelDialog.id);
+                    setCancelLoading(showCancelDialog.stripeSubscriptionId);
                     const response = await fetch('/api/webmaster/billing/cancel', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        subscriptionId: showCancelDialog.id,
+                        subscriptionId: showCancelDialog.stripeSubscriptionId,
                         cancelType
                       })
                     });

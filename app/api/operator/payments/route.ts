@@ -10,7 +10,7 @@ import { getAllPlanStripeIds } from "@/lib/stripe-db";
 import { getActiveSubscription, listCustomerInvoices } from "@/lib/stripe";
 import { getStripeCustomerId } from "@/lib/stripe-db";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
 
@@ -24,42 +24,90 @@ export async function GET() {
 
     // @ts-ignore - Extended session properties from auth.d.ts
     const organizationId = session.user.orgId;
+    console.log('🏢 Organization ID from session:', organizationId);
+    const { searchParams } = new URL(request.url);
+    const forceRefresh = searchParams.get('refresh') === 'true';
 
     // Get Stripe customer ID for this organization
     const stripeCustomerId = await getStripeCustomerId(organizationId);
+    console.log('💳 Stripe customer ID lookup:', { organizationId, stripeCustomerId });
 
     let subscription = null;
     let invoices: any[] = [];
 
     if (stripeCustomerId) {
       try {
-        // Get real subscription data from Stripe
+        // Get real subscription data from Stripe (always fresh for accuracy)
         const stripeSubscription = await getActiveSubscription(stripeCustomerId);
 
         if (stripeSubscription) {
-          // Sync Stripe data with local database
-          const syncedSubscription = await prisma.firmSubscription.upsert({
-            where: { firmId: organizationId },
-            update: {
-              stripeSubscriptionId: stripeSubscription.id,
-              stripePriceId: stripeSubscription.items.data[0]?.price.id,
-              status: stripeSubscription.status.toUpperCase() as any,
-              currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
-              currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
-              updatedAt: new Date()
-            },
-            create: {
-              firmId: organizationId,
-              stripeSubscriptionId: stripeSubscription.id,
-              stripePriceId: stripeSubscription.items.data[0]?.price.id,
-              status: stripeSubscription.status.toUpperCase() as any,
-              currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-              currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000)
-            },
-            include: {
-              plan: true
-            }
+          console.log('🔄 Syncing subscription data from Stripe to database...');
+          console.log('   Stripe status:', stripeSubscription.status);
+          console.log('   Database will be updated to:', stripeSubscription.status.toUpperCase());
+
+          // Check if subscription exists first
+          const existingSub = await prisma.firmSubscription.findUnique({
+            where: { firmId: organizationId }
           });
+          console.log('   Existing subscription in DB:', existingSub ? `status=${existingSub.status}` : 'none');
+
+          // Always sync latest Stripe data with local database for accurate status
+          let syncedSubscription;
+          try {
+            if (existingSub) {
+              console.log('   Updating existing subscription...');
+              syncedSubscription = await prisma.firmSubscription.update({
+                where: { firmId: organizationId },
+                data: {
+                  stripeSubscriptionId: stripeSubscription.id,
+                  stripePriceId: stripeSubscription.items.data[0]?.price.id,
+                  status: stripeSubscription.status.toUpperCase() as any,
+                  cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end || false,
+                  currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
+                  currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
+                  updatedAt: new Date()
+                },
+                include: {
+                  plan: true
+                }
+              });
+            } else {
+              console.log('   Creating new subscription...');
+              syncedSubscription = await prisma.firmSubscription.create({
+                data: {
+                  firmId: organizationId,
+                  stripeSubscriptionId: stripeSubscription.id,
+                  stripePriceId: stripeSubscription.items.data[0]?.price.id,
+                  status: stripeSubscription.status.toUpperCase() as any,
+                  currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
+                  currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000)
+                },
+                include: {
+                  plan: true
+                }
+              });
+            }
+
+            console.log('✅ Database sync complete. New status:', syncedSubscription.status);
+          } catch (dbError) {
+            console.error('❌ Database sync failed:', dbError);
+            // Continue with Stripe data even if DB update fails
+            syncedSubscription = existingSub || {
+              status: stripeSubscription.status.toUpperCase(),
+              stripeSubscriptionId: stripeSubscription.id,
+              stripePriceId: stripeSubscription.items.data[0]?.price.id,
+              currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
+              currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+              cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end || false,
+              plan: null
+            };
+          }
+
+          // Verify the update worked
+          const verifySub = await prisma.firmSubscription.findUnique({
+            where: { firmId: organizationId }
+          });
+          console.log('   Verification - DB now shows status:', verifySub?.status);
 
           subscription = syncedSubscription;
 

@@ -1,32 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Info, RefreshCw, Users, Building, Shield } from 'lucide-react';
-
-interface Organization {
-  id: string;
-  name: string;
-  email: string;
-  type?: 'PRIMARY' | 'CLIENT' | 'PARTNER';
-  isSingleton?: boolean;
-  status: string;
-  subscription_status?: string;
-  plan_name?: string;
-  createdAt?: string;
-}
-
-interface OrganizationsResponse {
-  success: boolean;
-  mode: 'single-tenant' | 'multi-tenant';
-  organizations: Organization[];
-  capabilities: {
-    canCreate: boolean;
-    canEdit: boolean;
-    canDelete: boolean;
-    canProvision: boolean;
-  };
-  message?: string;
-}
+import { Info, RefreshCw, Building, Shield } from 'lucide-react';
+import { OrganizationsResponseSchema, OrganizationsResponse } from '@/lib/schemas';
 
 export default function OrganizationsPage() {
   const [response, setResponse] = useState<OrganizationsResponse | null>(null);
@@ -36,16 +12,125 @@ export default function OrganizationsPage() {
     fetchOrganizations();
   }, []);
 
+  useEffect(() => {
+    // #region agent log - organizations page data update
+    fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'app/webmaster/organizations/page.tsx:data-update',
+        message: 'Organizations page received data update',
+        data: {
+          organizationsCount: response?.organizations?.length || 0,
+          firstOrg: response?.organizations?.[0] ? {
+            id: response.organizations[0].id,
+            name: response.organizations[0].name,
+            subscription_status: response.organizations[0].subscription_status,
+            plan_name: response.organizations[0].plan_name
+          } : null
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'frontend-debug',
+        hypothesisId: 'FE1,FE2,FE3'
+      })
+    }).catch(() => {});
+    // #endregion
+  }, [response]);
+
   const fetchOrganizations = async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/webmaster/organizations');
-      const data = await response.json();
-      if (data.success) {
-        setResponse(data);
+      const rawData = await response.json();
+
+      // #region agent log - organizations API response
+      fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'app/webmaster/organizations/page.tsx:api-response',
+          message: 'Organizations API response received',
+          data: {
+            success: rawData.success,
+            organizationsCount: rawData.organizations?.length || 0,
+            firstOrg: rawData.organizations?.[0] ? {
+              id: rawData.organizations[0].id,
+              subscription_status: rawData.organizations[0].subscription_status,
+              plan_name: rawData.organizations[0].plan_name
+            } : null
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'frontend-debug',
+          hypothesisId: 'FE1,FE2'
+        })
+      }).catch(() => {});
+      // #endregion
+
+      // Validate response with Zod (with fallback)
+      let validatedData: OrganizationsResponse;
+      try {
+        validatedData = OrganizationsResponseSchema.parse(rawData);
+
+        // #region agent log - zod validation success
+        fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: 'app/webmaster/organizations/page.tsx:zod-validation',
+            message: 'Zod validation successful',
+            data: {
+              validatedOrganizationsCount: validatedData.organizations?.length || 0,
+              firstValidatedOrg: validatedData.organizations?.[0] ? {
+                id: validatedData.organizations[0].id,
+                subscription_status: validatedData.organizations[0].subscription_status,
+                plan_name: validatedData.organizations[0].plan_name
+              } : null
+            },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'zod-test',
+            hypothesisId: 'FE3,FE4'
+          })
+        }).catch(() => {});
+        // #endregion
+      } catch (zodError) {
+        console.warn('Zod validation failed, using raw data:', zodError);
+        // #region agent log - zod validation failed
+        fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: 'app/webmaster/organizations/page.tsx:zod-validation-failed',
+            message: 'Zod validation failed, using raw data',
+            data: {
+              error: zodError instanceof Error ? zodError.message : String(zodError),
+              rawDataKeys: Object.keys(rawData)
+            },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'zod-test',
+            hypothesisId: 'FE3,FE4'
+          })
+        }).catch(() => {});
+        // #endregion
+
+        // Fallback: use raw data if Zod validation fails
+        validatedData = rawData as OrganizationsResponse;
+      }
+
+      if (validatedData.success) {
+        setResponse(validatedData);
+      } else {
+        console.error('API returned success: false', validatedData);
       }
     } catch (error) {
-      console.error('Failed to fetch organizations:', error);
+      if (error instanceof Error) {
+        console.error('Failed to fetch or validate organizations:', error.message);
+      } else {
+        console.error('Zod validation failed:', error);
+      }
     } finally {
       setLoading(false);
     }

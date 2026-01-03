@@ -9,6 +9,7 @@
  */
 
 import Stripe from "stripe";
+import { prisma } from "@/app/lib/db";
 
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("STRIPE_SECRET_KEY environment variable is not set");
@@ -53,21 +54,53 @@ export async function getOrCreateStripeCustomer(
   organizationName: string
 ) {
   try {
-    // Search for existing customer
+    // First check if we already have a customer ID in the database
+    const firm = await prisma.firm.findUnique({
+      where: { id: organizationId },
+      select: { stripeCustomerId: true }
+    });
+
+    if (firm?.stripeCustomerId) {
+      // Verify the customer still exists in Stripe
+      try {
+        const customer = await stripe.customers.retrieve(firm.stripeCustomerId);
+        return customer;
+      } catch (error) {
+        console.warn("Stored Stripe customer ID is invalid, will create new customer");
+        // Continue to search/create logic below
+      }
+    }
+
+    // Search for existing customer by metadata
     const customers = await stripe.customers.search({
       query: `metadata['organization_id']:'${organizationId}'`,
     });
 
     if (customers.data.length > 0) {
+      // Save the customer ID to database if not already saved
+      if (!firm?.stripeCustomerId) {
+        await prisma.firm.update({
+          where: { id: organizationId },
+          data: { stripeCustomerId: customers.data[0].id }
+        });
+      }
       return customers.data[0];
     }
 
     // Create new customer if not found
-    return await createStripeCustomer(
+    const newCustomer = await createStripeCustomer(
       organizationId,
       organizationEmail,
       organizationName
     );
+
+    // Save the new customer ID to database
+    await prisma.firm.update({
+      where: { id: organizationId },
+      data: { stripeCustomerId: newCustomer.id }
+    });
+
+    return newCustomer;
   } catch (error) {
     console.error("Error getting or creating Stripe customer:", error);
     throw error;
@@ -398,10 +431,21 @@ export async function getWebhookEvent(
   secret: string
 ) {
   try {
+    console.log("🔐 Webhook signature verification attempt:");
+    console.log("   Body length:", body.length);
+    console.log("   Signature present:", !!signature);
+    console.log("   Secret present:", !!secret);
+    console.log("   Secret starts with whsec_:", secret.startsWith('whsec_'));
+
     const event = stripe.webhooks.constructEvent(body, signature, secret);
+    console.log("✅ Webhook signature verified successfully for event:", event.type);
     return event;
   } catch (error) {
-    console.error("Error verifying webhook signature:", error);
+    console.error("❌ Webhook signature verification failed:");
+    console.error("   Error:", error.message);
+    console.error("   Body preview:", body.substring(0, 200) + "...");
+    console.error("   Signature:", signature ? signature.substring(0, 50) + "..." : "none");
+    console.error("   Secret configured:", !!secret);
     throw error;
   }
 }

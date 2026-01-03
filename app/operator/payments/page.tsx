@@ -75,11 +75,12 @@ export default function OperatorPaymentsPage() {
     }
   }, []);
 
-  const fetchPaymentInfo = async () => {
+  const fetchPaymentInfo = async (forceRefresh = false) => {
     try {
       setLoading(true);
       setError('');
-      const response = await fetch('/api/operator/payments');
+      const url = forceRefresh ? '/api/operator/payments?refresh=true' : '/api/operator/payments';
+      const response = await fetch(url);
       const data = await response.json();
       
       // #region agent log - frontend data received
@@ -170,11 +171,11 @@ export default function OperatorPaymentsPage() {
           </div>
         </div>
         <button
-          onClick={fetchPaymentInfo}
+          onClick={() => fetchPaymentInfo(true)}
           className="flex items-center gap-2 px-4 py-2 border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 text-xs font-bold uppercase tracking-widest transition-all"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refresh
+          Refresh from Stripe
         </button>
       </div>
 
@@ -254,11 +255,15 @@ export default function OperatorPaymentsPage() {
 
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowCancelDialog(true)}
+                  onClick={() => {
+                    // Auto-select immediate cancel if already set to cancel at period end
+                    setCancelType(subscription.cancelAtPeriodEnd ? 'immediate' : 'end_of_period');
+                    setShowCancelDialog(true);
+                  }}
                   className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
                   disabled={cancelLoading}
                 >
-                  Cancel Subscription
+                  {subscription.cancelAtPeriodEnd ? 'Cancel Immediately Instead' : 'Cancel Subscription'}
                 </button>
                 <button
                   onClick={fetchPaymentInfo}
@@ -276,10 +281,24 @@ export default function OperatorPaymentsPage() {
               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-lg max-w-md w-full mx-4">
                 <h3 className="text-lg font-semibold text-white mb-4">Cancel Subscription</h3>
                 <p className="text-zinc-400 mb-6">
-                  {cancelType === 'end_of_period'
-                    ? `Your subscription will remain active until ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'the end of your current billing period'}. After that date, you will lose access and need to subscribe again to continue using the service.`
-                    : 'Your subscription will end immediately and you will lose access right away. This action cannot be undone.'
-                  }
+                  {cancelType === 'end_of_period' ? (
+                    subscription.cancelAtPeriodEnd ? (
+                      // Already set to cancel at period end, choosing it again
+                      `Your subscription is already set to cancel at the end of the billing period (${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'period end'}). No changes will be made.`
+                    ) : (
+                      // Setting to cancel at period end
+                      `Your subscription will remain active until ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'the end of your current billing period'}. After that date, you will lose access and need to subscribe again to continue using the service.`
+                    )
+                  ) : (
+                    // Immediate cancellation
+                    subscription.cancelAtPeriodEnd ? (
+                      // Overriding cancel-at-period-end with immediate
+                      'This will override the scheduled cancellation and cancel your subscription immediately. You will lose access right away and this action cannot be undone.'
+                    ) : (
+                      // Normal immediate cancellation
+                      'Your subscription will end immediately and you will lose access right away. This action cannot be undone.'
+                    )
+                  )}
                 </p>
 
                 <div className="space-y-3 mb-6">
@@ -340,11 +359,11 @@ export default function OperatorPaymentsPage() {
                           setSuccessMessage(message);
                           fetchPaymentInfo(); // Refresh data
                         } else {
-                          alert(`Error: ${data.error || 'Failed to cancel subscription'}`);
+                          setError(data.error || 'Failed to cancel subscription');
                         }
                       } catch (error) {
                         console.error('Cancel error:', error);
-                        alert('Failed to cancel subscription. Please try again.');
+                        setError('Failed to cancel subscription. Please try again.');
                       } finally {
                         setCancelLoading(false);
                       }
@@ -429,11 +448,11 @@ export default function OperatorPaymentsPage() {
                             // Redirect to Stripe checkout
                             window.location.href = data.url;
                           } else {
-                            alert(`Error: ${data.error || 'Failed to create checkout session'}`);
+                            setError(data.error || 'Failed to create checkout session');
                           }
                         } catch (error) {
                           console.error('Checkout error:', error);
-                          alert('Failed to start checkout process. Please try again.');
+                          setError('Failed to start checkout process. Please try again.');
                         } finally {
                           setCheckoutLoading(null);
                         }

@@ -37,7 +37,7 @@ export async function GET() {
       organizationId: sub.firm.id,
       organizationName: sub.firm.name,
       planName: 'Stripe Plan', // Will be resolved from Stripe in UI
-      status: sub.status,
+      status: sub.status.toLowerCase(),
       amount: 0, // Will be resolved from Stripe in UI
       interval: 'month', // Will be resolved from Stripe in UI
       currentPeriodStart: sub.currentPeriodStart,

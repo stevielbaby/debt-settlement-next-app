@@ -49,6 +49,7 @@ function SignInForm() {
       if (result?.error) {
         setError('Invalid email or password');
         setLoading(false);
+        return;
       } else if (result?.ok) {
         // If no callback URL specified, redirect based on user role
         if (!callbackUrl || callbackUrl === '/') {

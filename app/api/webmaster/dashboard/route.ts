@@ -25,15 +25,16 @@ export async function GET() {
     // Organizations: Can compute from existing Firm model
     metrics.totalOrganizations = await prisma.firm.count();
 
+    // Active subscriptions: Can compute from existing FirmSubscription model
+    metrics.activeSubscriptions = await prisma.firmSubscription.count({
+      where: {
+        status: 'ACTIVE'
+      }
+    });
+
     // === UNAVAILABLE METRICS (require missing billing/usage models) ===
     // These represent real business metrics that will be implemented when schema is added
     const unavailableMetrics = [
-      {
-        name: 'activeSubscriptions',
-        reason: 'Requires FirmSubscription model with billing integration',
-        requiredModels: ['FirmSubscription', 'BillingPlan'],
-        phase: '2.7',
-      },
       {
         name: 'monthlyRecurringRevenue',
         reason: 'Requires billing integration and subscription tracking',

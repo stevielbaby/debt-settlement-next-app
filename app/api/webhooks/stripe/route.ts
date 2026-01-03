@@ -18,6 +18,28 @@ async function handleSubscriptionEvent(event: any) {
 
   console.log(`🔄 Processing subscription ${subscription.id} with status ${subscription.status} for customer ${stripeCustomerId}`);
 
+  // #region agent log - subscription event handler
+  fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: 'app/api/webhooks/stripe/route.ts:handleSubscriptionEvent',
+      message: 'Processing subscription event',
+      data: {
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        customerId: stripeCustomerId,
+        priceId: subscription.items.data[0]?.price?.id,
+        eventType: event.type
+      },
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'webhook-debug',
+      hypothesisId: 'WH2,WH4'
+    })
+  }).catch(() => {});
+  // #endregion
+
   // Find the organization by Stripe customer ID
   const firm = await prisma.firm.findFirst({
     where: { stripeCustomerId },
@@ -149,10 +171,50 @@ async function handleInvoicePayment(event: any, status: string) {
 }
 
 export async function POST(request: Request) {
+  // #region agent log - webhook received
+  fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: 'app/api/webhooks/stripe/route.ts:webhook-entry',
+      message: 'Stripe webhook received',
+      data: {
+        headers: Object.fromEntries(request.headers.entries()),
+        method: request.method,
+        url: request.url
+      },
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'webhook-debug',
+      hypothesisId: 'WH1,WH2,WH3,WH4,WH5'
+    })
+  }).catch(() => {});
+  // #endregion
+
   try {
     const body = await request.text();
     const signature = request.headers.get("stripe-signature") || "";
     const secret = process.env.STRIPE_WEBHOOK_SECRET || "";
+
+    // #region agent log - webhook secret check
+    fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'app/api/webhooks/stripe/route.ts:webhook-secret-check',
+        message: 'Checking webhook secret',
+        data: {
+          hasSecret: !!secret,
+          secretLength: secret.length,
+          hasSignature: !!signature
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'webhook-debug',
+        hypothesisId: 'WH1'
+      })
+    }).catch(() => {});
+    // #endregion
 
     if (!secret) {
       console.error("STRIPE_WEBHOOK_SECRET not configured");
@@ -176,6 +238,26 @@ export async function POST(request: Request) {
     });
 
     console.log(`Stripe webhook received: ${event.type}`);
+
+    // #region agent log - event processing start
+    fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'app/api/webhooks/stripe/route.ts:event-processing',
+        message: 'Processing webhook event',
+        data: {
+          eventType: event.type,
+          eventId: event.id,
+          created: event.created
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'webhook-debug',
+        hypothesisId: 'WH2,WH3,WH4'
+      })
+    }).catch(() => {});
+    // #endregion
 
     // Process webhook events
     let processedSuccessfully = false;

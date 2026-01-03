@@ -16,6 +16,22 @@ export async function GET() {
 
     if (isSingleTenant()) {
       // Single-tenant mode: Return only the singleton organization
+      // #region agent log - organizations database query
+      fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'app/api/webmaster/organizations/route.ts:database-query',
+          message: 'Executing organizations database query',
+          data: { firmId: DEPLOYMENT_CONFIG.singletonOrg.id },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'database-debug',
+          hypothesisId: 'DBQ1,DBQ2,DBQ3'
+        })
+      }).catch(() => {});
+      // #endregion
+
       const singletonOrg = await prisma.firm.findUnique({
         where: { id: DEPLOYMENT_CONFIG.singletonOrg.id },
         include: {
@@ -26,6 +42,31 @@ export async function GET() {
           }
         }
       });
+
+      // #region agent log - organizations query result
+      fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'app/api/webmaster/organizations/route.ts:query-result',
+          message: 'Organizations query result',
+          data: {
+            found: !!singletonOrg,
+            subscriptionCount: singletonOrg?.subscriptions?.length || 0,
+            subscriptions: singletonOrg?.subscriptions?.map(s => ({
+              id: s.id,
+              status: s.status,
+              stripePriceId: s.stripePriceId,
+              planName: s.plan?.name
+            })) || []
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'database-debug',
+          hypothesisId: 'DBQ1,DBQ2'
+        })
+      }).catch(() => {});
+      // #endregion
 
       if (!singletonOrg) {
         // If singleton doesn't exist (shouldn't happen in proper setup), return empty
@@ -43,6 +84,27 @@ export async function GET() {
         });
       }
 
+      // #region agent log - organizations API data
+      fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'app/api/webmaster/organizations/route.ts:org-data',
+          message: 'Organizations API returning data',
+          data: {
+            orgId: singletonOrg.id,
+            subscriptionCount: singletonOrg.subscriptions?.length || 0,
+            firstSubscriptionStatus: singletonOrg.subscriptions?.[0]?.status,
+            planName: singletonOrg.subscriptions?.[0]?.plan?.name
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'webhook-debug',
+          hypothesisId: 'DB1,DB2,DB3'
+        })
+      }).catch(() => {});
+      // #endregion
+
       const formattedOrg = {
         id: singletonOrg.id,
         name: singletonOrg.name,
@@ -50,7 +112,7 @@ export async function GET() {
         type: 'PRIMARY' as const,
         isSingleton: true,
         status: 'active' as const,
-        subscription_status: singletonOrg.subscriptions?.[0]?.status || 'inactive',
+        subscription_status: singletonOrg.subscriptions?.[0]?.status?.toLowerCase() || 'inactive',
         plan_name: singletonOrg.subscriptions?.[0]?.plan?.name || 'Free',
         createdAt: singletonOrg.createdAt.toISOString(),
       };
@@ -88,7 +150,7 @@ export async function GET() {
         email: org.publicEmail,
         type: 'CLIENT' as const,
         status: 'active' as const,
-        subscriptions_status: org.subscriptions?.[0]?.status || 'inactive',
+        subscriptions_status: org.subscriptions?.[0]?.status?.toLowerCase() || 'inactive',
         plan_name: org.subscriptions?.[0]?.plan?.name || 'Free',
         monthly_limit: 100, // TODO: Add to plan schema
         current_usage: 0, // TODO: Implement usage tracking
