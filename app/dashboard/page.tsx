@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Navbar } from '@/app/components/Navbar';
 import { UrgentBanner } from '@/app/components/UrgentBanner';
-import { PriorityDashboard } from '@/app/components/PriorityDashboard';
+import { IntakeConfirmation } from '@/app/components/IntakeConfirmation';
 
-export default function DashboardPage() {
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<any>(null);
@@ -17,13 +17,41 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserData = async () => {
+    const loadUserData = async () => {
+      // First, try to get user data from URL params (from form submission)
+      const firstName = searchParams.get('firstName');
+      const lastName = searchParams.get('lastName');
+      const email = searchParams.get('email');
+      const phone = searchParams.get('phone');
+      const situation = searchParams.get('situation');
       const caseNumber = searchParams.get('caseNumber');
-      if (caseNumber) {
+
+      if (firstName && lastName && email) {
+        // Use data from URL params (fresh form submission)
+        setUser({
+          caseNumber: caseNumber || '0001',
+          firstName,
+          lastName,
+          email,
+          phone: phone || '',
+          situation: situation || '',
+          debtAmount: null,
+          currentCompany: null,
+          appointmentDate: null,
+          appointmentTime: null,
+          appointmentSlotStart: null,
+          appointmentSlotEnd: null
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: try to fetch from API using case number
+      if (caseNumber && !caseNumber.startsWith('TEMP-')) {
         try {
           const response = await fetch(`/api/leads/${caseNumber}`);
           const result = await response.json();
-          
+
           if (result.success && result.lead) {
             setUser({
               caseNumber: result.lead.caseNumber,
@@ -39,7 +67,7 @@ export default function DashboardPage() {
               appointmentSlotStart: result.lead.appointmentSlotStart,
               appointmentSlotEnd: result.lead.appointmentSlotEnd
             });
-            
+
             // If appointment exists, set booking time
             if (result.lead.appointmentTime) {
               setBookingTime(result.lead.appointmentTime);
@@ -47,12 +75,10 @@ export default function DashboardPage() {
           }
         } catch (error) {
           console.error('Error fetching user data:', error);
-        } finally {
-          setLoading(false);
         }
-      } else {
-        setLoading(false);
       }
+
+      setLoading(false);
     };
 
     const checkCalendarStatus = async () => {
@@ -69,7 +95,7 @@ export default function DashboardPage() {
       }
     };
 
-    fetchUserData();
+    loadUserData();
     checkCalendarStatus();
   }, [searchParams]);
 
@@ -135,7 +161,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-50 selection:bg-orange-600 selection:text-white overflow-x-hidden">
       <UrgentBanner />
       <Navbar />
-      <PriorityDashboard 
+      <IntakeConfirmation 
         user={user} 
         shouldScan={shouldScan}
         onScanComplete={markScanComplete}
@@ -145,6 +171,14 @@ export default function DashboardPage() {
         onRefreshUserData={refreshUserData}
       />
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading dashboard...</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }
 

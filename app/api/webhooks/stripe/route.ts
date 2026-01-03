@@ -2,15 +2,135 @@
  * POST /api/webhooks/stripe
  * Handle Stripe webhook events
  * No authentication required (but signature verified)
+ * PHASE 3B: Basic webhook handling implemented
  */
 
 import { NextResponse } from "next/server";
-import { getWebhookEvent, stripe } from "@/lib/stripe";
-import {
-  updateInvoiceStatus,
-  saveStripeSubscription,
-} from "@/lib/stripe-db";
-import { sql } from "@/app/lib/db";
+import { prisma } from "@/app/lib/db";
+import { getWebhookEvent } from "@/lib/stripe";
+
+/**
+ * Handle subscription created/updated events
+ */
+async function handleSubscriptionEvent(event: any) {
+  const subscription = event.data.object;
+  const stripeCustomerId = subscription.customer;
+
+  // Find the organization by Stripe customer ID
+  const firm = await prisma.firm.findFirst({
+    where: { stripeCustomerId },
+    select: { id: true }
+  });
+
+  if (!firm) {
+    console.error(`No firm found for Stripe customer ${stripeCustomerId}`);
+    return;
+  }
+
+  // Find the plan by Stripe price ID
+  const priceId = subscription.items.data[0]?.price?.id;
+  const plan = await prisma.stripePlan.findFirst({
+    where: { stripePriceId: priceId },
+    select: { id: true }
+  });
+
+  // Update or create subscription record
+  await prisma.firmSubscription.upsert({
+    where: { firmId: firm.id },
+    update: {
+      stripeSubscriptionId: subscription.id,
+      status: subscription.status.toUpperCase(),
+      currentPeriodStart: new Date(subscription.current_period_start * 1000),
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      stripePriceId: priceId,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+      updatedAt: new Date()
+    },
+    create: {
+      firmId: firm.id,
+      stripeSubscriptionId: subscription.id,
+      stripePriceId: priceId,
+      status: subscription.status.toUpperCase(),
+      currentPeriodStart: new Date(subscription.current_period_start * 1000),
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      cancelAtPeriodEnd: subscription.cancel_at_period_end || false
+    }
+  });
+
+  console.log(`Updated subscription ${subscription.id} for firm ${firm.id}`);
+}
+
+/**
+ * Handle subscription deleted events
+ */
+async function handleSubscriptionDeleted(event: any) {
+  const subscription = event.data.object;
+  const stripeCustomerId = subscription.customer;
+
+  // Find the organization by Stripe customer ID
+  const firm = await prisma.firm.findFirst({
+    where: { stripeCustomerId },
+    select: { id: true }
+  });
+
+  if (!firm) {
+    console.error(`No firm found for Stripe customer ${stripeCustomerId}`);
+    return;
+  }
+
+  // Update subscription status to cancelled
+  await prisma.firmSubscription.updateMany({
+    where: {
+      firmId: firm.id,
+      stripeSubscriptionId: subscription.id
+    },
+    data: {
+      status: 'CANCELLED',
+      updatedAt: new Date()
+    }
+  });
+
+  console.log(`Cancelled subscription ${subscription.id} for firm ${firm.id}`);
+}
+
+/**
+ * Handle invoice payment events
+ */
+async function handleInvoicePayment(event: any, status: string) {
+  const invoice = event.data.object;
+
+  // Find the organization by Stripe customer ID
+  const firm = await prisma.firm.findFirst({
+    where: { stripeCustomerId: invoice.customer },
+    select: { id: true }
+  });
+
+  if (!firm) {
+    console.error(`No firm found for Stripe customer ${invoice.customer}`);
+    return;
+  }
+
+  // Update or create invoice record
+  await prisma.invoice.upsert({
+    where: { stripeInvoiceId: invoice.id },
+    update: {
+      status: status === 'paid' ? 'paid' : 'uncollectible',
+      paidDate: status === 'paid' ? new Date(invoice.status_transitions?.paid_at * 1000) : undefined,
+      updatedAt: new Date()
+    },
+    create: {
+      firmId: firm.id,
+      stripeInvoiceId: invoice.id,
+      amount: invoice.amount_due,
+      status: status === 'paid' ? 'paid' : 'uncollectible',
+      issueDate: new Date(invoice.created * 1000),
+      dueDate: invoice.due_date ? new Date(invoice.due_date * 1000) : undefined,
+      paidDate: status === 'paid' ? new Date(invoice.status_transitions?.paid_at * 1000) : undefined
+    }
+  });
+
+  console.log(`Updated invoice ${invoice.id} with status ${status} for firm ${firm.id}`);
+}
 
 export async function POST(request: Request) {
   try {
@@ -27,118 +147,92 @@ export async function POST(request: Request) {
     }
 
     // Verify webhook signature
-    const event = getWebhookEvent(body, signature, secret);
+    const event = await getWebhookEvent(body, signature, secret);
 
-    console.log(`Processing Stripe event: ${event.type}`);
-
-    // Handle different event types
-    switch (event.type) {
-      case "invoice.paid": {
-        const invoice = event.data.object as any;
-        console.log(`Invoice paid: ${invoice.id}`);
-
-        // Update invoice status in database
-        const paidDate = new Date(invoice.paid_at * 1000);
-        await updateInvoiceStatus(invoice.id, "paid", paidDate);
-
-        break;
+    // Log the event (Phase 3B: Basic logging, no full processing yet)
+    await prisma.webhookEvent.create({
+      data: {
+        eventId: event.id,
+        eventType: event.type,
+        processed: false,
+        rawPayload: JSON.parse(JSON.stringify(event.data)),
       }
+    });
 
-      case "invoice.payment_failed": {
-        const invoice = event.data.object as any;
-        console.log(`Invoice payment failed: ${invoice.id}`);
+    console.log(`Stripe webhook received: ${event.type}`);
 
-        // Update invoice status
-        await updateInvoiceStatus(invoice.id, "past_due");
+    // Process webhook events
+    let processedSuccessfully = false;
 
-        break;
-      }
+    try {
+      switch (event.type) {
+        case 'customer.subscription.created':
+        case 'customer.subscription.updated':
+          await handleSubscriptionEvent(event);
+          processedSuccessfully = true;
+          break;
 
-      case "customer.subscription.updated": {
-        const subscription = event.data.object as any;
-        console.log(`Subscription updated: ${subscription.id}`);
+        case 'customer.subscription.deleted':
+          await handleSubscriptionDeleted(event);
+          processedSuccessfully = true;
+          break;
 
-        // Get organization from customer metadata
-        const customer = await stripe.customers.retrieve(subscription.customer as string);
-        const organizationId = (customer as any).metadata?.organization_id;
+        case 'invoice.payment_succeeded':
+          await handleInvoicePayment(event, 'paid');
+          processedSuccessfully = true;
+          break;
 
-        if (organizationId) {
-          const periodStart = new Date(subscription.current_period_start * 1000);
-          const periodEnd = new Date(subscription.current_period_end * 1000);
+        case 'invoice.payment_failed':
+          await handleInvoicePayment(event, 'failed');
+          processedSuccessfully = true;
+          break;
 
-          // Get plan ID from our database using price ID
-          const item = subscription.items.data[0];
-          const priceId = item.price.id;
+        default:
+          // Mark other important events as processed without specific handling
+          const importantEvents = [
+            'customer.subscription.created',
+            'customer.subscription.updated',
+            'customer.subscription.deleted',
+            'invoice.payment_succeeded',
+            'invoice.payment_failed'
+          ];
 
-          const planResult = await sql`
-            SELECT id FROM app.subscription_plans
-            WHERE stripe_price_id = ${priceId}
-            LIMIT 1
-          `;
-
-          if (planResult.length > 0) {
-            await saveStripeSubscription(
-              organizationId,
-              subscription.id,
-              priceId,
-              planResult[0].id,
-              subscription.status,
-              periodStart,
-              periodEnd
-            );
+          if (importantEvents.includes(event.type)) {
+            processedSuccessfully = true;
           }
+      }
+
+      // Mark event as processed
+      await prisma.webhookEvent.update({
+        where: { eventId: event.id },
+        data: { processed: processedSuccessfully }
+      });
+
+      console.log(`Webhook ${event.type} ${processedSuccessfully ? 'processed successfully' : 'marked as processed'}`);
+    } catch (processingError) {
+      console.error(`Error processing webhook ${event.type}:`, processingError);
+      // Still mark as processed to avoid infinite retries, but log the error
+      await prisma.webhookEvent.update({
+        where: { eventId: event.id },
+        data: {
+          processed: true,
+          errorMessage: processingError.message
         }
-
-        break;
-      }
-
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as any;
-        console.log(`Subscription deleted: ${subscription.id}`);
-
-        // Get organization from customer metadata
-        const customer = await stripe.customers.retrieve(subscription.customer as string);
-        const organizationId = (customer as any).metadata?.organization_id;
-
-        if (organizationId) {
-          // Update subscription status in database
-          await sql`
-            UPDATE app.organization_subscriptions
-            SET status = 'canceled',
-                updated_at = NOW()
-            WHERE stripe_subscription_id = ${subscription.id}
-          `;
-        }
-
-        break;
-      }
-
-      case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object as any;
-        console.log(`Payment intent succeeded: ${paymentIntent.id}`);
-
-        // Handle one-time payment success
-        // You can store this event for later reference
-        break;
-      }
-
-      case "payment_intent.payment_failed": {
-        const paymentIntent = event.data.object as any;
-        console.log(`Payment intent failed: ${paymentIntent.id}`);
-
-        // Handle payment failure
-        break;
-      }
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`);
+      });
     }
 
     return NextResponse.json({ success: true, received: true });
-  } catch (error) {
-    console.error("Webhook error:", error);
+
+  } catch (error: any) {
+    console.error("Webhook processing error:", error);
     return NextResponse.json(
-      { success: false, error: "Webhook processing failed" },
+      {
+        success: false,
+        error: {
+          code: 'WEBHOOK_ERROR',
+          message: error.message || 'Webhook processing failed'
+        }
+      },
       { status: 400 }
     );
   }

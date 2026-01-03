@@ -8,6 +8,7 @@ export default async function WebmasterLayout({ children }: { children: React.Re
   const session = await auth();
 
   // Check if user is webmaster
+  // @ts-ignore - Extended session properties from auth.d.ts
   if (!session?.user || session.user.role !== 'webmaster') {
     redirect('/auth/signin');
   }
@@ -46,18 +47,11 @@ export default async function WebmasterLayout({ children }: { children: React.Re
             Organizations
           </Link>
           <Link
-            href="/webmaster/subscriptions"
-            className="flex items-center gap-3 px-4 py-3 text-sm font-bold uppercase tracking-widest text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-all"
-          >
-            <CreditCard size={16} />
-            Subscriptions
-          </Link>
-          <Link
             href="/webmaster/billing"
             className="flex items-center gap-3 px-4 py-3 text-sm font-bold uppercase tracking-widest text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-all"
           >
             <CreditCard size={16} />
-            Billing
+            Billing & Operations
           </Link>
           <Link
             href="/webmaster/usage"

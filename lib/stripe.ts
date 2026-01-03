@@ -15,7 +15,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2024-12-01.acacia",
+  apiVersion: "2024-06-20",
 });
 
 /**
@@ -203,14 +203,18 @@ export async function createStripeProduct(
 
 /**
  * Get a subscription's upcoming invoice
+ * TODO: Fix Stripe API method - upcoming() method not available in current version
  */
 export async function getUpcomingInvoice(customerId: string) {
   try {
-    const invoice = await stripe.invoices.retrieveUpcoming({
-      customer: customerId,
-    });
+    // const invoice = await stripe.invoices.upcoming({
+    //   customer: customerId,
+    // });
+    // return invoice;
 
-    return invoice;
+    // Temporarily return null until Stripe API is fixed
+    console.log("getUpcomingInvoice not implemented - Stripe API method unavailable");
+    return null;
   } catch (error) {
     console.error("Error getting upcoming invoice:", error);
     return null;
@@ -248,19 +252,42 @@ export async function getSubscriptionStatus(subscriptionId: string) {
 }
 
 /**
- * Get a customer's active subscription
+ * Get a customer's active, trialing, or incomplete subscription
  */
 export async function getActiveSubscription(customerId: string) {
   try {
-    const subscriptions = await stripe.subscriptions.list({
+    // Check for active subscriptions first
+    let subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: "active",
       limit: 1,
     });
 
+    if (subscriptions.data[0]) {
+      return subscriptions.data[0];
+    }
+
+    // Check for trialing subscriptions
+    subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "trialing",
+      limit: 1,
+    });
+
+    if (subscriptions.data[0]) {
+      return subscriptions.data[0];
+    }
+
+    // Check for incomplete subscriptions (created but payment not completed)
+    subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "incomplete",
+      limit: 1,
+    });
+
     return subscriptions.data[0] || null;
   } catch (error) {
-    console.error("Error getting active subscription:", error);
+    console.error("Error getting subscription:", error);
     throw error;
   }
 }
@@ -289,6 +316,65 @@ export async function createPaymentIntent(
     return paymentIntent;
   } catch (error) {
     console.error("Error creating payment intent:", error);
+    throw error;
+  }
+}
+
+/**
+ * List active Stripe products
+ */
+export async function listStripeProducts() {
+  try {
+    const products = await stripe.products.list({ active: true });
+    return products.data;
+  } catch (error) {
+    console.error("Error listing Stripe products:", error);
+    throw error;
+  }
+}
+
+/**
+ * List active Stripe prices
+ */
+export async function listStripePrices() {
+  try {
+    const prices = await stripe.prices.list({ active: true });
+    return prices.data;
+  } catch (error) {
+    console.error("Error listing Stripe prices:", error);
+    throw error;
+  }
+}
+
+/**
+ * Create a Stripe checkout session for subscription
+ */
+export async function createCheckoutSession(
+  priceId: string,
+  customerId: string,
+  successUrl: string,
+  cancelUrl: string,
+  metadata?: Record<string, string>
+) {
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription',
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: metadata || {},
+    });
+
+    return session;
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
     throw error;
   }
 }

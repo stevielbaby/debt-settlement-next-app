@@ -14,6 +14,8 @@ interface Organization {
   monthly_limit: number;
   current_usage: number;
   created_at: string;
+  has_stripe_customer?: boolean;
+  stripe_customer_id?: string;
   contact_name?: string;
   phone?: string;
   address?: string;
@@ -32,6 +34,7 @@ export default function OrganizationDetail({ params }: { params: { id: string } 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
 
   useEffect(() => {
     fetchOrganization();
@@ -53,6 +56,33 @@ export default function OrganizationDetail({ params }: { params: { id: string } 
       setError('Failed to load organization');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const createStripeCustomer = async () => {
+    if (!organization) return;
+
+    try {
+      setCreatingCustomer(true);
+      setError('');
+      const response = await fetch(`/api/webmaster/organizations/${organization.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_stripe_customer' })
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        // Refresh organization data to show updated Stripe customer status
+        await fetchOrganization();
+        alert('Stripe customer created successfully!');
+      } else {
+        setError(data.error || 'Failed to create Stripe customer');
+      }
+    } catch (err) {
+      setError('Failed to create Stripe customer');
+    } finally {
+      setCreatingCustomer(false);
     }
   };
 
@@ -160,6 +190,24 @@ export default function OrganizationDetail({ params }: { params: { id: string } 
                   {organization.subscription_status}
                 </span>
               </div>
+              <div>
+                <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-2">Stripe Customer</p>
+                <span
+                  className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-widest inline-block ${
+                    organization.has_stripe_customer
+                      ? 'text-green-500 bg-green-900/20'
+                      : 'text-orange-500 bg-orange-900/20'
+                  }`}
+                >
+                  {organization.has_stripe_customer ? 'Active' : 'Not Created'}
+                </span>
+              </div>
+              {organization.stripe_customer_id && (
+                <div>
+                  <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-2">Customer ID</p>
+                  <p className="font-mono text-xs text-zinc-400">{organization.stripe_customer_id}</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -230,12 +278,23 @@ export default function OrganizationDetail({ params }: { params: { id: string } 
             >
               Edit Details
             </Link>
-            <Link
-              href={`/webmaster/subscriptions?org=${organization.id}`}
-              className="block w-full px-4 py-2 border border-zinc-700 text-white hover:border-orange-600 text-xs font-bold uppercase tracking-widest text-center transition-all"
-            >
-              Manage Subscription
-            </Link>
+
+            {!organization.has_stripe_customer && (
+              <button
+                onClick={createStripeCustomer}
+                disabled={creatingCustomer}
+                className="block w-full px-4 py-2 bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-xs font-bold uppercase tracking-widest text-center transition-all"
+              >
+                {creatingCustomer ? 'Creating...' : 'Create Stripe Customer'}
+              </button>
+            )}
+
+            {organization.has_stripe_customer && (
+              <div className="block w-full px-4 py-2 bg-green-900/20 border border-green-800 text-green-400 text-xs font-bold uppercase tracking-widest text-center">
+                Stripe Customer Active
+              </div>
+            )}
+
             <button className="block w-full px-4 py-2 border border-red-900 text-red-400 hover:bg-red-900/20 text-xs font-bold uppercase tracking-widest transition-all">
               Suspend Organization
             </button>

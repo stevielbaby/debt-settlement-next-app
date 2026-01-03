@@ -10,7 +10,15 @@ export default function CaseReviewPage() {
   const router = useRouter();
 
   const handleComplete = (data: any) => {
-    router.push(`/dashboard?caseNumber=${data.caseNumber}`);
+    const params = new URLSearchParams({
+      caseNumber: data.caseNumber || '0001',
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      email: data.email || '',
+      phone: data.phone || '',
+      situation: data.situation || '',
+    });
+    router.push(`/dashboard?${params.toString()}`);
   };
 
   const handleBack = () => {

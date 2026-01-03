@@ -1,0 +1,168 @@
+# Cursor Rules — Law Firm Intake + Operator Dashboard + Billing (Single-Tenant, firmId-ready)
+
+## Description
+
+These rules govern implementation of a **single-tenant law firm intake + booking flow**, an **operator dashboard**, and a **webmaster portal** with **Stripe subscription billing**.
+Even though the product is single-tenant today, the schema and APIs must remain **future multi-tenant ready** by consistently scoping data with `firmId` where applicable.
+
+The system must enforce:
+
+* **Public intake** → creates a Lead (JSON + version, no attachments)
+* **Duplicate email rejection** for intake when an active case or convertible lead exists
+* **Lead inbox filtering** (date received, debt amount, status, name search)
+* **Lead → Case conversion** with immutable snapshot (case should not change if lead changes)
+* **Sequential case numbers per firm** (transaction-safe)
+* **Case management** (statuses, notes, documents with strict limits)
+* **Booking** (30 min only, firm timezone, double-book prevention via DB constraint)
+* **Invite-code-based operator signup** (email-bound, expires 10 days, not revocable, audited attempts)
+* **Stripe billing** (firm-owned subscription, plan sync, webhook signature verification + idempotency + audit rows)
+* **Daily usage rollups** (metrics tracked per firm)
+
+If an implementation decision is ambiguous, do **not invent product behavior**—implement the most neutral option and leave a TODO referencing the Open Questions.
+
+---
+
+## File Patterns (apply these rules to matching files)
+
+* **Core app + API**
+
+  * `app/**/*.{ts,tsx,js,jsx}`
+  * `src/**/*.{ts,tsx,js,jsx}`
+  * `pages/**/*.{ts,tsx,js,jsx}`
+  * `lib/**/*.{ts,tsx,js,jsx}`
+  * `server/**/*.{ts,tsx,js,jsx}`
+
+* **API routes**
+
+  * `app/api/**/*.{ts,js}`
+  * `pages/api/**/*.{ts,js}`
+
+* **DB / schema / migrations**
+
+  * `prisma/**/*.{prisma,sql}`
+  * `migrations/**/*.{sql}`
+  * `db/**/*.{ts,js,sql}`
+
+* **Validation + contracts**
+
+  * `schemas/**/*.{ts,js}`
+  * `contracts/**/*.{ts,js}`
+  * `openapi/**/*.{yaml,yml,json}`
+  * `types/**/*.{ts,js}`
+
+* **Stripe + billing**
+
+  * `stripe/**/*.{ts,js}`
+  * `billing/**/*.{ts,js}`
+
+* **Auth / invites**
+
+  * `auth/**/*.{ts,tsx,js,jsx}`
+  * `middleware.{ts,js}`
+
+---
+
+## Non-Negotiable Rules
+
+1. **firmId everywhere ownership matters** - include firmId in tables where data ownership spans firms. Single-tenant deployments may omit firmId where it adds complexity without immediate value.
+2. **Firm singleton** is the source of truth for timezone + public contact info.
+3. **Lead type is inferred by form and never changes.**
+4. **Intake payload stored as JSON + payloadVersion**. Intake attachments are **optional** - if enabled, implement with document management (max 5MB, PDF/JPEG/PNG only).
+5. **Duplicate rules are runtime rules** (do not use DB unique constraints for these):
+
+   * If an **active case** exists for email → reject intake with: **"We already have your request."**
+   * If a **convertible lead** exists for email → reject with same message
+   * CLOSED cases do not block
+6. **Case creation (manual or conversion) must block** if an active case exists with same email.
+7. **caseNumber must be sequential + monotonic per firm** and allocated **transaction-safely**.
+8. **Booking is 30 minutes only** and must be atomic against slot availability:
+
+   * DB unique constraint: **(firmId, startTime)** where firmId exists
+9. **Subscription belongs to firm**, not user. Only one active subscription row is required.
+10. **Stripe webhooks must be verified + idempotent** using stored `stripeEventId`, and must always write an audit row.
+
+---
+
+## Roles & Access Control
+
+* `WEBMASTER`: global admin, not part of firm; can generate invites, sync plans, view usage, cancel subscription override.
+* `OPERATOR`: belongs to firm; manages leads/cases/notes/docs, booking windows/settings, billing page (initiate/cancel).
+
+Public routes: intake + booking only.
+
+---
+
+## Core Entities (behavioral requirements)
+
+### Lead
+
+* fields: `firmId`, `leadType`, `payloadJson`, `payloadVersion`, `debtAmount` (numeric from dropdown), `status`, `createdAt`
+* shown in operator UI as human-readable (render payload cleanly)
+
+### Case
+
+* created by lead conversion or manual
+* minimum manual fields: name + email
+* has `caseNumber` sequential per firm
+* `CaseStatus`: `ACTIVE | CLOSED` (simplified for initial implementation)
+* `caseType` is mutable over time
+* stores `leadId?` reference AND **leadSnapshotJson** at conversion time
+
+### Notes
+
+* internal only; add-only; soft delete
+
+### Documents
+
+* operator-only upload
+* allowed types: PDF/JPG/JPEG/PNG
+* max 5MB per upload
+* soft delete supported
+* track per-doc `byteSize` + accounting for storage bytes (case + firm via rollups)
+
+### Booking
+
+* cannot exist without a lead
+* timezone from firm
+* availability = Google free/busy ∩ operator booking windows ∩ internal booked table
+* public cannot self-cancel/reschedule
+
+### Invites
+
+* invite codes are email-bound, role-encoded, expire in 10 days, not revocable
+* must log invite attempts (success/fail + mismatch reasons)
+* email normalization: trim + lowercase (must be consistent everywhere)
+
+### Billing
+
+* plans synced from Stripe catalog into DB
+* firm chooses 1 plan
+* operator can cancel subscription
+* webhooks verified + idempotent + audited
+
+### Usage Daily Rollups
+
+Track per firm per day:
+
+* leads created, cases created, bookings created
+* file uploads count, storage bytes
+* active operators
+* webhook failures
+* emails sent (only if implemented)
+
+---
+
+## "Do Not Build Yet"
+
+* Traffic analytics in DB
+* Public cancel/reschedule flow
+* Invite revocation
+* Multi-tenant UX (schema-ready only)
+
+## "Now Optional"
+
+* Intake attachments - may be implemented with document management system
+
+---
+
+**End Rules**

@@ -1,0 +1,133 @@
+# Cursor Rule — Prisma DB Schema (Single-Tenant now, `firmId` everywhere)
+
+## Description
+
+This rule governs all **database/schema work** for the Law Firm Intake system. The app is **single-tenant today** (one firm), but must remain **future multi-tenant ready** by including and scoping domain records with `firmId` wherever ownership belongs to the firm.
+
+The schema must reflect these invariants:
+
+* **Firm is the unit of ownership** for leads, cases, bookings, documents, subscription, and metrics where multi-tenancy is planned.
+* **WEBMASTER users are global** (`firmId = null`), **OPERATOR users belong to the firm** (`firmId = <firm.id>`).
+* **Leads come from public intake** (flexible JSON + version). **Cases are internal** and can be created from leads (conversion) or manually.
+* **Duplicate blocking is runtime logic** (not email uniqueness constraints):
+
+  * Reject new intake if an **active case** exists (status not CLOSED).
+  * Reject new intake if a **convertible lead** exists (e.g., LeadStatus NEW).
+  * Allow new intakes after CLOSED cases.
+* **Case numbers are sequential per firm**, monotonic, and transaction-safe (use a counter table).
+* **Bookings are 30 minutes only** and must prevent double booking via `@@unique([firmId, startAt])` where firmId exists.
+* **Documents are operator-only**, max 5MB per upload, track byte sizes, support soft delete.
+* **Metrics are daily rollups** (no real-time counters required).
+
+When editing Prisma models, migrations, or DB helpers:
+
+* Preserve the above invariants.
+* Prefer indexes that match the operator dashboard filters (date received, debt amount, status, name/email search).
+* Use soft delete (`deletedAt`) for notes/documents.
+* Use webhook audit rows for Stripe idempotency.
+
+---
+
+## Pattern (files this rule applies to)
+
+* `prisma/**/*.prisma`
+* `prisma/migrations/**/*`
+* `migrations/**/*.{sql,ts,js}`
+* `db/**/*.{ts,js,sql}`
+* `src/db/**/*.{ts,js,sql}`
+* `lib/db/**/*.{ts,js,sql}`
+* `app/api/**/*.{ts,js}` *(only for DB-side invariants like counter transactions, unique constraints, and blocking queries)*
+
+---
+
+## Required Prisma Schema Behaviors (Must Implement)
+
+### 1) Tenant Ownership (`firmId`)
+
+* Include `firmId` in models where data ownership spans firms or multi-tenancy is planned.
+* `WEBMASTER` users: `firmId = null`.
+* Operators: `firmId = <firm.id>` where firm scoping matters.
+* Index firm-scoped lookups with `@@index([firmId, ...])` where firmId exists.
+
+### 2) Leads vs Cases (snapshot on conversion)
+
+* Lead stores:
+
+  * `type` (inferred by intake form; immutable)
+  * `intakePayload` (Json) + `intakeVersion` (Int)
+  * `debtAmount` (Int? from dropdown)
+  * normalized email fields for duplicate checks and filtering
+* Case stores:
+
+  * firm-scoped sequential `caseNumber` (`@@unique([firmId, caseNumber])`)
+  * snapshot contact fields (`firstName/lastName/email/emailNorm/...`)
+  * mutable `type`
+  * optional `leadId`
+* Conversion must create a case snapshot so case does not change if lead changes later.
+
+### 3) Duplicate Blocking (runtime, not unique constraints)
+
+* Do NOT add unique constraints on email for Leads or Cases.
+* Duplicate logic must rely on queries:
+
+  * Active case definition: `status NOT IN (CLOSED, LOSS)`
+  * Lead convertible definition: typically `LeadStatus = NEW`
+* Closed/LOSS cases do not block future intakes.
+
+### 4) Case Numbering (transaction-safe)
+
+* Implement a counter table:
+
+  * `FirmCounter { firmId (PK), nextCaseNumber Int }`
+* Case creation (manual or conversion) must:
+
+  * allocate `caseNumber` inside a DB transaction
+  * increment `nextCaseNumber` in the same transaction
+
+### 5) Bookings (atomic + no double-book)
+
+* Booking must require `leadId` (intake first).
+* Slot length is always 30 minutes.
+* Prevent double booking with:
+
+  * `@@unique([firmId, startAt])`
+
+### 6) Documents (limits + accounting)
+
+* CaseDocument tracks `byteSize` and includes soft delete via `deletedAt`.
+* Enforce 5MB max and allowed mime types at API boundary (schema stores metadata).
+* Rollups for storage bytes happen in daily metrics; schema must support it.
+
+### 7) Stripe + Auditing
+
+* FirmSubscription is `@@unique([firmId])` (one subscription row per firm).
+* WebhookEvent table stores:
+
+  * `eventId` unique for idempotency
+  * success/failure + errorMessage
+  * raw payload Json
+
+### 8) Usage Metrics (daily rollups)
+
+* `UsageDailyRollup` unique on `(firmId, day)` and tracks:
+
+  * leadsCreated, casesCreated, bookingsCreated
+  * fileUploadsCount, storageBytes
+  * activeOperators, webhookFailures, emailsSent (if used)
+
+---
+
+## "Do Not Do" (Schema Anti-Patterns)
+
+* Do NOT enforce "one active case per email" with a unique constraint.
+* Do NOT store raw invite codes (hash only).
+* Do NOT implement real-time counters when daily rollups are sufficient.
+* Do NOT add firmId to every table if it creates complexity without value in single-tenant mode.
+
+---
+
+**End of rule**
+
+---
+alwaysApply: true
+---

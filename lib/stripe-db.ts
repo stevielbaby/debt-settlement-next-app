@@ -3,7 +3,7 @@
  * Handles storing and retrieving Stripe data in the database
  */
 
-import { sql } from "@/app/lib/db";
+import { prisma } from "@/app/lib/db";
 
 /**
  * Store or update Stripe customer ID for an organization
@@ -13,15 +13,15 @@ export async function saveStripeCustomerId(
   stripeCustomerId: string
 ) {
   try {
-    const result = await sql`
-      UPDATE app.organizations
-      SET stripe_customer_id = ${stripeCustomerId},
-          updated_at = NOW()
-      WHERE id = ${organizationId}
-      RETURNING id, stripe_customer_id
-    `;
+    const result = await prisma.firm.update({
+      where: { id: organizationId },
+      data: {
+        stripeCustomerId,
+        updatedAt: new Date()
+      }
+    });
 
-    return result[0];
+    return { id: result.id, stripe_customer_id: result.stripeCustomerId };
   } catch (error) {
     console.error("Error saving Stripe customer ID:", error);
     throw error;
@@ -33,14 +33,12 @@ export async function saveStripeCustomerId(
  */
 export async function getStripeCustomerId(organizationId: string) {
   try {
-    const result = await sql`
-      SELECT stripe_customer_id
-      FROM app.organizations
-      WHERE id = ${organizationId}
-      LIMIT 1
-    `;
+    const firm = await prisma.firm.findUnique({
+      where: { id: organizationId },
+      select: { stripeCustomerId: true }
+    });
 
-    return result[0]?.stripe_customer_id || null;
+    return firm?.stripeCustomerId || null;
   } catch (error) {
     console.error("Error getting Stripe customer ID:", error);
     throw error;
@@ -60,59 +58,30 @@ export async function saveStripeSubscription(
   currentPeriodEnd: Date
 ) {
   try {
-    // First, get the existing subscription ID to see if we're updating
-    const existing = await sql`
-      SELECT id FROM app.organization_subscriptions
-      WHERE organization_id = ${organizationId}
-      LIMIT 1
-    `;
+    const result = await prisma.firmSubscription.upsert({
+      where: { firmId: organizationId },
+      update: {
+        stripeSubscriptionId,
+        status: status.toUpperCase() as any,
+        currentPeriodStart,
+        currentPeriodEnd,
+        updatedAt: new Date()
+      },
+      create: {
+        firmId: organizationId,
+        stripePriceId: stripePriceId,
+        stripeSubscriptionId,
+        status: status.toUpperCase() as any,
+        currentPeriodStart,
+        currentPeriodEnd
+      }
+    });
 
-    if (existing.length > 0) {
-      // Update existing subscription
-      const result = await sql`
-        UPDATE app.organization_subscriptions
-        SET plan_id = ${planId},
-            status = ${status},
-            current_period_start = ${currentPeriodStart},
-            current_period_end = ${currentPeriodEnd},
-            stripe_subscription_id = ${stripeSubscriptionId},
-            stripe_price_id = ${stripePriceId},
-            updated_at = NOW()
-        WHERE id = ${existing[0].id}
-        RETURNING id, stripe_subscription_id, status
-      `;
-
-      return result[0];
-    } else {
-      // Create new subscription
-      const result = await sql`
-        INSERT INTO app.organization_subscriptions (
-          organization_id,
-          plan_id,
-          status,
-          current_period_start,
-          current_period_end,
-          stripe_subscription_id,
-          stripe_price_id,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          ${organizationId},
-          ${planId},
-          ${status},
-          ${currentPeriodStart},
-          ${currentPeriodEnd},
-          ${stripeSubscriptionId},
-          ${stripePriceId},
-          NOW(),
-          NOW()
-        )
-        RETURNING id, stripe_subscription_id, status
-      `;
-
-      return result[0];
-    }
+    return {
+      id: result.id,
+      stripe_subscription_id: result.stripeSubscriptionId,
+      status: result.status
+    };
   } catch (error) {
     console.error("Error saving Stripe subscription:", error);
     throw error;
@@ -124,14 +93,24 @@ export async function saveStripeSubscription(
  */
 export async function getStripeSubscription(organizationId: string) {
   try {
-    const result = await sql`
-      SELECT stripe_subscription_id, stripe_price_id, status, current_period_end
-      FROM app.organization_subscriptions
-      WHERE organization_id = ${organizationId}
-      LIMIT 1
-    `;
+    const subscription = await prisma.firmSubscription.findFirst({
+      where: { firmId: organizationId },
+      select: {
+        stripeSubscriptionId: true,
+        plan: { select: { stripePriceId: true } },
+        status: true,
+        currentPeriodEnd: true
+      }
+    });
 
-    return result[0] || null;
+    if (!subscription) return null;
+
+    return {
+      stripe_subscription_id: subscription.stripeSubscriptionId,
+      stripe_price_id: subscription.plan?.stripePriceId,
+      status: subscription.status,
+      current_period_end: subscription.currentPeriodEnd
+    };
   } catch (error) {
     console.error("Error getting Stripe subscription:", error);
     throw error;
@@ -147,16 +126,19 @@ export async function savePlanStripeIds(
   stripePriceId: string
 ) {
   try {
-    const result = await sql`
-      UPDATE app.subscription_plans
-      SET stripe_product_id = ${stripeProductId},
-          stripe_price_id = ${stripePriceId},
-          updated_at = NOW()
-      WHERE id = ${planId}
-      RETURNING id, stripe_product_id, stripe_price_id
-    `;
+    const result = await prisma.stripePlan.update({
+      where: { id: planId },
+      data: {
+        stripePriceId,
+        updatedAt: new Date()
+      }
+    });
 
-    return result[0];
+    return {
+      id: result.id,
+      stripe_product_id: null, // TODO: Add to schema if needed
+      stripe_price_id: result.stripePriceId
+    };
   } catch (error) {
     console.error("Error saving plan Stripe IDs:", error);
     throw error;
@@ -168,14 +150,22 @@ export async function savePlanStripeIds(
  */
 export async function getPlanStripePriceId(planId: string) {
   try {
-    const result = await sql`
-      SELECT stripe_price_id, stripe_product_id, price, monthly_limit
-      FROM app.subscription_plans
-      WHERE id = ${planId}
-      LIMIT 1
-    `;
+    const plan = await prisma.stripePlan.findUnique({
+      where: { id: planId },
+      select: {
+        stripePriceId: true,
+        priceCents: true
+      }
+    });
 
-    return result[0] || null;
+    if (!plan) return null;
+
+    return {
+      stripe_price_id: plan.stripePriceId,
+      stripe_product_id: null, // TODO: Add to schema if needed
+      price: plan.priceCents,
+      monthly_limit: null // TODO: Add to schema if needed
+    };
   } catch (error) {
     console.error("Error getting plan Stripe price ID:", error);
     throw error;
@@ -195,33 +185,23 @@ export async function saveStripeInvoice(
   paidDate?: Date
 ) {
   try {
-    const result = await sql`
-      INSERT INTO app.invoices (
-        organization_id,
-        stripe_invoice_id,
+    const result = await prisma.invoice.create({
+      data: {
+        firmId: organizationId,
+        stripeInvoiceId,
         amount,
         status,
-        issue_date,
-        due_date,
-        paid_date,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        ${organizationId},
-        ${stripeInvoiceId},
-        ${amount},
-        ${status},
-        ${issueDate},
-        ${dueDate},
-        ${paidDate || null},
-        NOW(),
-        NOW()
-      )
-      RETURNING id, stripe_invoice_id
-    `;
+        issueDate,
+        dueDate,
+        paidDate
+      },
+      select: {
+        id: true,
+        stripeInvoiceId: true
+      }
+    });
 
-    return result[0];
+    return result;
   } catch (error) {
     console.error("Error saving Stripe invoice:", error);
     throw error;
@@ -237,16 +217,20 @@ export async function updateInvoiceStatus(
   paidDate?: Date
 ) {
   try {
-    const result = await sql`
-      UPDATE app.invoices
-      SET status = ${status},
-          paid_date = ${paidDate || null},
-          updated_at = NOW()
-      WHERE stripe_invoice_id = ${stripeInvoiceId}
-      RETURNING id, status
-    `;
+    const result = await prisma.invoice.update({
+      where: { stripeInvoiceId },
+      data: {
+        status,
+        paidDate,
+        updatedAt: new Date()
+      },
+      select: {
+        id: true,
+        status: true
+      }
+    });
 
-    return result[0];
+    return result;
   } catch (error) {
     console.error("Error updating invoice status:", error);
     throw error;
@@ -258,14 +242,25 @@ export async function updateInvoiceStatus(
  */
 export async function getAllPlanStripeIds() {
   try {
-    const result = await sql`
-      SELECT id, name, stripe_product_id, stripe_price_id, price, monthly_limit
-      FROM app.subscription_plans
-      WHERE is_active = true
-      ORDER BY monthly_limit ASC
-    `;
+    const plans = await prisma.stripePlan.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        stripePriceId: true,
+        priceCents: true
+      },
+      orderBy: { priceCents: 'asc' } // Using price as proxy for ordering
+    });
 
-    return result;
+    return plans.map(plan => ({
+      id: plan.id,
+      name: plan.name,
+      stripe_product_id: null, // TODO: Add to schema if needed
+      stripe_price_id: plan.stripePriceId,
+      price: plan.priceCents,
+      monthly_limit: null // TODO: Add to schema if needed
+    }));
   } catch (error) {
     console.error("Error getting plan Stripe IDs:", error);
     throw error;

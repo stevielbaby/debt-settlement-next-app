@@ -1,0 +1,244 @@
+# AI-Ready Development Rules
+
+Derived from: *Developer Experience in the Age of AI Coding Agents*
+Speaker: Max Kanat-Alexander (Capital One)
+
+---
+
+## Rule 1: Deterministic Validation Is Mandatory
+
+**Description**
+All external inputs (API requests, forms, webhooks, jobs) MUST be validated deterministically.
+Validation must produce **actionable, human-readable errors**.
+
+AI agents perform best when:
+
+* input contracts are explicit
+* failures are predictable
+* error messages explain *what* failed and *why*
+
+Never rely on implicit assumptions, optional fields without validation, or “happy-path only” logic.
+
+**Implementation Guidance**
+
+* Use schema validation (e.g. Zod) at system boundaries
+* Fail fast at the edge (API route, job handler)
+* Errors must be structured and user-safe
+
+**File Patterns**
+
+```
+app/api/**/route.ts
+lib/validators/**
+lib/schemas/**
+```
+
+---
+
+## Rule 2: One Source of Truth for Data Shape
+
+**Description**
+Each data shape MUST have exactly one authoritative definition.
+
+AI agents break when:
+
+* request shapes are redefined in multiple places
+* frontend, backend, and DB disagree on structure
+
+Schemas are the contract. Types are derived from schemas, never duplicated manually.
+
+**Implementation Guidance**
+
+* Define schema once
+* Derive TypeScript types from it
+* Reuse across API, UI, jobs, and tests
+
+**File Patterns**
+
+```
+lib/schemas/**
+lib/types/**
+```
+
+---
+
+## Rule 3: Systems Must Be Explicitly Structured
+
+**Description**
+Code structure must communicate *intent*, not just function.
+
+AI agents rely heavily on:
+
+* predictable folder layout
+* clear separation of concerns
+* consistent naming conventions
+
+Avoid “clever” abstractions that obscure flow.
+
+**Implementation Guidance**
+
+* Separate: routing, validation, business logic, persistence
+* No mixed responsibilities in route handlers
+* Prefer boring, explicit code
+
+**File Patterns**
+
+```
+app/**
+lib/**
+services/**
+```
+
+**Framework-Specific Notes**
+
+* **Next.js App Router**: Dynamic route parameters are `Promise<{param: string}>`, not `{param: string}`. Always await params in route handlers.
+* **Error Handling**: Use consistent error envelopes across all endpoints for predictable API behavior.
+
+---
+
+## Rule 4: APIs Must Be Machine-Readable First
+
+**Description**
+APIs are not just for humans — they are tools for agents.
+
+Every API endpoint must be:
+
+* predictable
+* consistently shaped
+* easily discoverable via schemas or contracts
+
+If an endpoint cannot be reasoned about statically, agents will hallucinate usage.
+
+**Implementation Guidance**
+
+* Request/response schemas required
+* No undocumented side effects
+* Stable error shapes
+
+**File Patterns**
+
+```
+app/api/**
+openapi/**
+```
+
+---
+
+## Rule 5: Errors Are Part of the Interface
+
+**Description**
+Errors are not edge cases — they are first-class outputs.
+
+AI agents improve dramatically when:
+
+* errors are typed
+* error codes are consistent
+* messages explain resolution steps
+
+Silent failures, generic 500s, or console-only logging are forbidden.
+
+**Implementation Guidance**
+
+* Structured error objects
+* Distinguish validation vs system errors
+* Never swallow errors
+
+**File Patterns**
+
+```
+lib/errors/**
+app/api/**
+```
+
+---
+
+## Rule 6: Prefer Stability Over “New Hotness”
+
+**Description**
+Tools and patterns must favor **long-term predictability** over novelty.
+
+AI agents perform best in environments where:
+
+* conventions are stable
+* dependencies are boring
+* patterns don’t churn
+
+Avoid frequent paradigm shifts unless absolutely necessary.
+
+**Implementation Guidance**
+
+* Use well-known libraries
+* Avoid experimental patterns in core flows
+* Introduce change incrementally
+
+**File Patterns**
+
+```
+package.json
+lib/**
+```
+
+---
+
+## Rule 7: Code Must Teach Its Intent
+
+**Description**
+Assume the reader is:
+
+* a junior engineer
+* or an AI agent with no institutional memory
+
+Code must explain *why*, not just *what*.
+
+**Implementation Guidance**
+
+* Write intent comments for non-obvious logic
+* Avoid implicit behavior
+* Prefer clarity over brevity
+
+**File Patterns**
+
+```
+lib/**
+services/**
+app/**
+```
+
+---
+
+## Rule 8: Bad Codebases Break Agents (And Humans)
+
+**Description**
+AI output quality is capped by codebase quality.
+
+Messy codebases:
+
+* force hallucinations
+* increase review burden
+* reduce trust in automation
+
+Clean structure creates a **virtuous cycle**:
+better code → better AI → faster iteration → better code.
+
+**Implementation Guidance**
+
+* Enforce these rules consistently
+* Refactor before scaling automation
+* Treat developer experience as infrastructure
+
+**File Patterns**
+
+```
+(entire repository)
+```
+
+---
+
+## Summary Principle (Non-Negotiable)
+
+> **What’s good for humans is good for AI.**
+> Predictability, clarity, validation, and structure are no-regret investments.
+
+---
+alwaysApply: true
+---

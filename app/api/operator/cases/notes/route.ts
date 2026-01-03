@@ -1,139 +1,261 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from '@/auth';
-import { sql } from '@/app/lib/db';
+import { prisma } from '@/app/lib/db';
+import { getCurrentFirm } from '@/lib/utils';
+import {
+  CreateNoteRequestSchema,
+  GetNotesQuerySchema,
+  GetNotesResponseSchema,
+  CreateNoteResponseSchema,
+  NoteResponseSchema
+} from '@/lib/schemas/notes';
+import { ErrorEnvelopeSchema } from '@/lib/schemas/dto';
 
-interface CaseNote {
-  id: string;
-  authorName: string;
-  noteBody: string;
-  createdAt: string;
-}
-
-// GET notes for a case
-export async function GET(req: NextRequest) {
-  const session = await auth();
-
-  if (!session || !session.user || !['operator', 'webmaster'].includes(session.user.role)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const searchParams = req.nextUrl.searchParams;
-  const caseId = searchParams.get('caseId');
-  const orgId = session.user.orgId;
-  const isWebmaster = session.user.role === 'webmaster';
-  const userId = session.user.id;
-
-  if (!caseId) {
-    return NextResponse.json({ error: 'caseId is required' }, { status: 400 });
-  }
-
-  if (!isWebmaster && !orgId) {
-    return NextResponse.json({ error: 'Missing organization context' }, { status: 400 });
-  }
-
+export async function GET(request: NextRequest) {
   try {
-    // Verify case access
-    const caseCheck = await sql`
-      SELECT id, org_id FROM app.cases WHERE id = ${caseId}
-      ${!isWebmaster ? sql`AND org_id = ${orgId}` : sql``}
-      LIMIT 1
-    `;
+    const session = await auth();
 
-    if (!caseCheck || caseCheck.length === 0) {
-      return NextResponse.json({ error: 'Case not found or not accessible' }, { status: 404 });
+    if (!session?.user) {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+        { status: 401 }
+      );
     }
 
-    // Get notes
-    const notes = await sql`
-      SELECT cn.id,
-             cn.case_id,
-             cn.author_user_id,
-             cn.note_body,
-             cn.created_at,
-             u.name
-      FROM app.case_notes cn
-      JOIN app.users u ON u.id = cn.author_user_id
-      WHERE cn.case_id = ${caseId}
-      ORDER BY cn.created_at DESC
-      LIMIT 50
-    `;
+    // @ts-ignore - Extended session properties from auth.d.ts
+    const role = session.user.role;
+    // @ts-ignore - Extended session properties from auth.d.ts
+    const userOrgId = session.user.orgId;
 
-    const mapped: CaseNote[] = notes.map((row: any) => ({
-      id: row.id,
-      authorName: row.name,
-      noteBody: row.note_body,
-      createdAt: row.created_at,
+    // Only operators and webmasters can access case notes
+    if (role !== 'operator' && role !== 'webmaster') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+        { status: 403 }
+      );
+    }
+
+    // Validate query parameters
+    const { searchParams } = new URL(request.url);
+    const queryValidation = GetNotesQuerySchema.safeParse({
+      caseId: searchParams.get('caseId')
+    });
+
+    if (!queryValidation.success) {
+      return NextResponse.json(
+        ErrorEnvelopeSchema.parse({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid query parameters',
+            details: { validationErrors: queryValidation.error.issues }
+          }
+        }),
+        { status: 400 }
+      );
+    }
+
+    const { caseId } = queryValidation.data;
+
+    // Get current firm for filtering
+    const firm = await getCurrentFirm();
+
+    // Verify case exists and belongs to user's firm
+    const caseExists = await prisma.case.findFirst({
+      where: {
+        id: caseId,
+        firmId: firm.id
+      },
+      select: { id: true }
+    });
+
+    if (!caseExists) {
+      return NextResponse.json(
+        ErrorEnvelopeSchema.parse({
+          success: false,
+          error: {
+            code: 'CASE_NOT_FOUND',
+            message: 'Case not found or access denied'
+          }
+        }),
+        { status: 404 }
+      );
+    }
+
+    // Fetch notes with author information
+    const notes = await prisma.caseNote.findMany({
+      where: {
+        caseId: caseId
+      },
+      include: {
+        author: {
+          select: {
+            name: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Transform to response format
+    const notesResponse = notes.map(note => ({
+      id: note.id,
+      caseId: note.caseId,
+      authorId: note.authorId,
+      authorName: note.author?.name || 'Unknown User',
+      noteBody: note.body,
+      createdAt: note.createdAt.toISOString()
     }));
 
-    return NextResponse.json({ success: true, notes: mapped });
+    const response = GetNotesResponseSchema.parse({
+      success: true,
+      notes: notesResponse
+    });
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error fetching case notes:', error);
-    return NextResponse.json({ error: 'Failed to load notes' }, { status: 500 });
+    const errorResponse = ErrorEnvelopeSchema.parse({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to fetch case notes'
+      }
+    });
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }
 
-// POST new note to a case
-export async function POST(req: NextRequest) {
-  const session = await auth();
-
-  if (!session || !session.user || !['operator', 'webmaster'].includes(session.user.role)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const searchParams = req.nextUrl.searchParams;
-  const caseId = searchParams.get('caseId');
-  const orgId = session.user.orgId;
-  const isWebmaster = session.user.role === 'webmaster';
-  const userId = session.user.id;
-
-  if (!caseId) {
-    return NextResponse.json({ error: 'caseId is required' }, { status: 400 });
-  }
-
-  if (!isWebmaster && !orgId) {
-    return NextResponse.json({ error: 'Missing organization context' }, { status: 400 });
-  }
-
-  const body = await req.json().catch(() => null);
-  const { noteBody } = (body || {}) as { noteBody?: string };
-
-  if (!noteBody || noteBody.trim() === '') {
-    return NextResponse.json({ error: 'Note body is required' }, { status: 400 });
-  }
-
+export async function POST(request: NextRequest) {
   try {
-    // Verify case access
-    const caseCheck = await sql`
-      SELECT id, org_id FROM app.cases WHERE id = ${caseId}
-      ${!isWebmaster ? sql`AND org_id = ${orgId}` : sql``}
-      LIMIT 1
-    `;
+    const session = await auth();
 
-    if (!caseCheck || caseCheck.length === 0) {
-      return NextResponse.json({ error: 'Case not found or not accessible' }, { status: 404 });
+    if (!session?.user) {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+        { status: 401 }
+      );
     }
 
-    // Insert note
-    const inserted = await sql`
-      INSERT INTO app.case_notes (case_id, author_user_id, note_body)
-      VALUES (${caseId}, ${userId}, ${noteBody.trim()})
-      RETURNING id, created_at
-    `;
+    // @ts-ignore - Extended session properties from auth.d.ts
+    const role = session.user.role;
+    const userId = session.user.id;
+    // @ts-ignore - Extended session properties from auth.d.ts
+    const userOrgId = session.user.orgId;
 
-    if (!inserted || inserted.length === 0) {
-      return NextResponse.json({ error: 'Failed to create note' }, { status: 500 });
+    // Only operators and webmasters can create case notes
+    if (role !== 'operator' && role !== 'webmaster') {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+        { status: 403 }
+      );
     }
 
-    const newNote: CaseNote = {
-      id: inserted[0].id,
-      authorName: session.user.name || 'Unknown',
-      noteBody: noteBody.trim(),
-      createdAt: inserted[0].created_at,
+    // Validate query parameters
+    const { searchParams } = new URL(request.url);
+    const caseId = searchParams.get('caseId');
+
+    if (!caseId) {
+      return NextResponse.json(
+        ErrorEnvelopeSchema.parse({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Case ID is required'
+          }
+        }),
+        { status: 400 }
+      );
+    }
+
+    // Validate request body
+    const body = await request.json();
+    const bodyValidation = CreateNoteRequestSchema.safeParse(body);
+
+    if (!bodyValidation.success) {
+      return NextResponse.json(
+        ErrorEnvelopeSchema.parse({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid request data',
+            details: { validationErrors: bodyValidation.error.issues }
+          }
+        }),
+        { status: 400 }
+      );
+    }
+
+    const { noteBody } = bodyValidation.data;
+
+    // Get current firm for filtering
+    const firm = await getCurrentFirm();
+
+    // Verify case exists and belongs to user's firm
+    const caseExists = await prisma.case.findFirst({
+      where: {
+        id: caseId,
+        firmId: firm.id
+      },
+      select: { id: true }
+    });
+
+    if (!caseExists) {
+      return NextResponse.json(
+        ErrorEnvelopeSchema.parse({
+          success: false,
+          error: {
+            code: 'CASE_NOT_FOUND',
+            message: 'Case not found or access denied'
+          }
+        }),
+        { status: 404 }
+      );
+    }
+
+    // Create the note
+    const newNote = await prisma.caseNote.create({
+      data: {
+        caseId: caseId,
+        authorId: userId,
+        body: noteBody
+      },
+      include: {
+        author: {
+          select: {
+            name: true
+          }
+        }
+      }
+    });
+
+    // Transform to response format
+    const noteResponse = {
+      id: newNote.id,
+      caseId: newNote.caseId,
+      authorId: newNote.authorId,
+      authorName: newNote.author?.name || 'Unknown User',
+      noteBody: newNote.body,
+      createdAt: newNote.createdAt.toISOString()
     };
 
-    return NextResponse.json({ success: true, note: newNote });
+    const response = CreateNoteResponseSchema.parse({
+      success: true,
+      note: noteResponse
+    });
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error creating case note:', error);
-    return NextResponse.json({ error: 'Failed to create note' }, { status: 500 });
+    const errorResponse = ErrorEnvelopeSchema.parse({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to create case note'
+      }
+    });
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }

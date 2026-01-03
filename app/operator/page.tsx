@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ShieldCheck, Search, Filter, AlertTriangle, ArrowRight, Clock, Building2, User, Tag, FileText, Settings, CreditCard } from "lucide-react";
 import Link from "next/link";
+import { extractErrorMessage } from "@/lib/error-utils";
 
 interface CaseItem {
   id: string;
@@ -45,7 +46,8 @@ export default function OperatorCasesPage() {
         if (res.ok && data.success && Array.isArray(data.cases)) {
           setCases(data.cases);
         } else {
-          setError(data.error || "Failed to load cases");
+          // Extract human-readable message from API error response
+          setError(extractErrorMessage(data.error) || "Failed to load cases");
         }
       } catch (err) {
         console.error("Failed to fetch cases", err);
@@ -152,7 +154,9 @@ export default function OperatorCasesPage() {
       ) : error ? (
         <div className="border border-red-900 bg-red-950/40 p-8 flex flex-col gap-3 text-center text-red-200">
           <p className="text-white font-semibold">Could not load cases</p>
-          <p className="text-red-200 text-sm">{error}</p>
+          <p className="text-red-200 text-sm">
+            {extractErrorMessage(error)}
+          </p>
           <p className="text-zinc-500 text-xs">Ensure you are signed in as an operator or webmaster.</p>
         </div>
       ) : filtered.length === 0 ? (

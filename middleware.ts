@@ -35,6 +35,7 @@ export default auth((request) => {
   }
 
   // Role-based access control
+  // @ts-ignore - Extended session properties from auth.d.ts
   const { role } = session.user;
 
   // Webmaster routes

@@ -1,34 +1,53 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, Check, X } from 'lucide-react';
+import { CreditCard, Users, Plus, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
-interface SubscriptionPlan {
+interface Plan {
   id: string;
   name: string;
   description: string;
   price: number;
+  interval: string;
+  priceDisplay: string;
+}
+
+interface Organization {
+  id: string;
+  name: string;
+  email: string;
+  type: string;
+  status: string;
+  subscriptions_status: string;
+  plan_name: string;
   monthly_limit: number;
-  features: string[];
-  is_active: boolean;
+  current_usage: number;
 }
 
 interface Subscription {
   id: string;
-  organization_id: string;
-  organization_name: string;
-  plan_id: string;
-  plan_name: string;
+  organizationId: string;
+  organizationName: string;
+  planName: string; // Will be resolved from Stripe data
   status: string;
-  current_period_start: string;
-  current_period_end: string;
+  amount: number; // Will be resolved from Stripe data
+  interval: string; // Will be resolved from Stripe data
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  stripeSubscriptionId: string;
+  createdAt: string;
 }
 
 export default function SubscriptionsPage() {
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'plans' | 'subscriptions'>('plans');
+  const [error, setError] = useState<string | null>(null);
+  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -37,30 +56,99 @@ export default function SubscriptionsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [plansRes, subsRes] = await Promise.all([
+      setError(null);
+
+      // Fetch plans, organizations, and subscriptions in parallel
+      const [plansRes, orgsRes, subsRes] = await Promise.all([
         fetch('/api/webmaster/plans'),
-        fetch('/api/webmaster/subscriptions'),
+        fetch('/api/webmaster/organizations'),
+        fetch('/api/webmaster/subscriptions')
       ]);
 
-      const plansData = await plansRes.json();
-      const subsData = await subsRes.json();
+      const [plansData, orgsData, subsData] = await Promise.all([
+        plansRes.json(),
+        orgsRes.json(),
+        subsRes.json()
+      ]);
+
+      console.log('Plans API response:', plansData);
+      console.log('Plans found:', plansData.plans?.length || 0);
 
       if (plansData.success) setPlans(plansData.plans);
+      if (orgsData.success) setOrganizations(orgsData.organizations);
       if (subsData.success) setSubscriptions(subsData.subscriptions);
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
+
+    } catch (err) {
+      setError('Failed to load subscription data');
+      console.error('Error fetching subscription data:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleAssignPlan = async () => {
+    if (!selectedOrg || !selectedPlan) return;
+
+    try {
+      setAssigning(true);
+      const response = await fetch('/api/webmaster/subscriptions/assign-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: selectedOrg.id,
+          priceId: selectedPlan.id // Now using Stripe price ID directly
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Subscription assigned successfully!');
+        setShowAssignModal(false);
+        setSelectedOrg(null);
+        setSelectedPlan(null);
+        fetchData(); // Refresh data
+      } else {
+        alert(`Failed to assign subscription: ${data.error?.message || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert('Network error occurred. Please try again.');
+      console.error('Error assigning plan:', err);
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active': return 'text-green-500 bg-green-900/20';
+      case 'trialing': return 'text-blue-500 bg-blue-900/20';
+      case 'past_due': return 'text-orange-500 bg-orange-900/20';
+      case 'canceled': return 'text-red-500 bg-red-900/20';
+      default: return 'text-zinc-500 bg-zinc-900/20';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-zinc-500">
+        <RefreshCw className="animate-spin mr-2" size={20} />
+        Loading subscription data...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-4xl font-serif font-bold text-white uppercase tracking-tight">Subscriptions</h2>
-          <p className="text-zinc-500 text-sm mt-2">Manage plans and organization subscriptions</p>
+          <h2 className="text-4xl font-serif font-bold text-white uppercase tracking-tight">
+            Subscription Management
+          </h2>
+          <p className="text-zinc-500 text-sm mt-2">
+            Assign plans to organizations and manage subscriptions
+          </p>
         </div>
         <button
           onClick={fetchData}
@@ -71,113 +159,135 @@ export default function SubscriptionsPage() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-zinc-800">
-        <button
-          onClick={() => setActiveTab('plans')}
-          className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${
-            activeTab === 'plans'
-              ? 'text-orange-600 border-b-2 border-orange-600'
-              : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          Subscription Plans
-        </button>
-        <button
-          onClick={() => setActiveTab('subscriptions')}
-          className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${
-            activeTab === 'subscriptions'
-              ? 'text-orange-600 border-b-2 border-orange-600'
-              : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          Organization Subscriptions
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-zinc-500">
-          <RefreshCw className="animate-spin mr-2" size={20} />
-          Loading...
+      {error && (
+        <div className="bg-red-900/20 border border-red-800 p-6 flex items-start gap-3">
+          <AlertCircle className="text-red-500 shrink-0 mt-1" size={20} />
+          <div>
+            <p className="text-red-400 font-bold">Error</p>
+            <p className="text-red-300 text-sm mt-1">{error}</p>
+          </div>
         </div>
-      ) : activeTab === 'plans' ? (
-        // Plans Grid
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {plans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`border p-6 space-y-4 ${
-                plan.is_active
-                  ? 'bg-zinc-900 border-zinc-800 hover:border-orange-600'
-                  : 'bg-zinc-900/50 border-zinc-800/50 opacity-60'
-              } transition-all`}
-            >
-              <div>
-                <h3 className="text-lg font-serif font-bold text-white uppercase tracking-tight">{plan.name}</h3>
-                <p className="text-zinc-500 text-xs mt-1">{plan.description}</p>
-              </div>
+      )}
 
-              <div className="border-t border-zinc-800 pt-4">
-                <div className="text-3xl font-serif font-bold text-white">
-                  ${plan.price}
-                  <span className="text-sm text-zinc-500 ml-2">/month</span>
+      {/* Plans Section */}
+      <div className="space-y-4">
+        <h3 className="text-xl font-serif font-bold text-white uppercase tracking-tight">
+          Available Plans
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {plans.map(plan => (
+            <div key={plan.id} className="bg-zinc-900 border border-zinc-800 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="font-bold text-white">{plan.name}</h4>
+                  <p className="text-zinc-500 text-sm">{plan.description}</p>
                 </div>
-                <div className="text-zinc-400 text-sm mt-2">{plan.monthly_limit} cases/month</div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-white">{plan.priceDisplay}</div>
+                </div>
               </div>
-
-              <div className="border-t border-zinc-800 pt-4 space-y-2">
-                {plan.features.map((feature, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-sm text-zinc-300">
-                    <Check size={16} className="text-green-500 flex-shrink-0" />
-                    {feature}
-                  </div>
-                ))}
-              </div>
-
-              {!plan.is_active && <div className="text-red-500 text-xs font-bold uppercase tracking-widest">Inactive</div>}
+              <button
+                onClick={() => {
+                  setSelectedPlan(plan);
+                  setShowAssignModal(true);
+                }}
+                className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-bold uppercase tracking-widest transition-all"
+              >
+                Assign to Organization
+              </button>
             </div>
           ))}
         </div>
-      ) : (
-        // Subscriptions List
-        <div className="overflow-x-auto border border-zinc-800">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-widest text-zinc-500">Organization</th>
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-widest text-zinc-500">Plan</th>
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-widest text-zinc-500">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-widest text-zinc-500">Current Period</th>
-              </tr>
-            </thead>
-            <tbody>
-              {subscriptions.map((sub) => (
-                <tr key={sub.id} className="border-b border-zinc-800 hover:bg-zinc-900/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-semibold text-white">{sub.organization_name}</div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-white">{sub.plan_name}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-widest inline-block ${
-                        sub.status === 'active'
-                          ? 'text-green-500 bg-green-900/20'
-                          : sub.status === 'trialing'
-                          ? 'text-blue-500 bg-blue-900/20'
-                          : 'text-red-500 bg-red-900/20'
-                      }`}
-                    >
+      </div>
+
+      {/* Current Subscriptions */}
+      <div className="space-y-4">
+        <h3 className="text-xl font-serif font-bold text-white uppercase tracking-tight">
+          Active Subscriptions
+        </h3>
+        {subscriptions.length === 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 p-8 text-center text-zinc-500">
+            No active subscriptions yet. Assign a plan to get started.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {subscriptions.map(sub => (
+              <div key={sub.id} className="bg-zinc-900 border border-zinc-800 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-white">{sub.organizationName}</h4>
+                    <p className="text-zinc-500 text-sm">Stripe Subscription • {sub.stripeSubscriptionId}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-widest ${getStatusColor(sub.status)}`}>
                       {sub.status}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-zinc-400">
-                    {new Date(sub.current_period_start).toLocaleDateString()} -{' '}
-                    {new Date(sub.current_period_end).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <p className="text-zinc-500 text-xs mt-1">
+                      Since {new Date(sub.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Assign Plan Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-zinc-900 border border-zinc-800 p-8 max-w-md w-full mx-4">
+            <h3 className="text-xl font-serif font-bold text-white uppercase tracking-tight mb-6">
+              Assign Subscription
+            </h3>
+
+            {selectedPlan && (
+              <div className="mb-6">
+                <h4 className="font-bold text-white mb-2">Selected Plan</h4>
+                <div className="bg-zinc-800 p-4 rounded">
+                  <div className="font-bold text-white">{selectedPlan.name}</div>
+                  <div className="text-zinc-400 text-sm">{selectedPlan.priceDisplay}</div>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-6">
+              <h4 className="font-bold text-white mb-2">Select Organization</h4>
+              <select
+                value={selectedOrg?.id || ''}
+                onChange={(e) => {
+                  const org = organizations.find(o => o.id === e.target.value);
+                  setSelectedOrg(org || null);
+                }}
+                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 text-white rounded"
+              >
+                <option value="">Choose an organization...</option>
+                {organizations
+                  .filter(org => org.subscriptions_status === 'inactive' || org.subscriptions_status === null)
+                  .map(org => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAssignModal(false)}
+                className="flex-1 px-4 py-2 border border-zinc-700 text-zinc-400 hover:text-white transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignPlan}
+                disabled={!selectedOrg || assigning}
+                className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold uppercase tracking-widest transition-all"
+              >
+                {assigning ? 'Assigning...' : 'Assign Plan'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Navbar } from '@/app/components/Navbar';
 import { UrgentBanner } from '@/app/components/UrgentBanner';
 import { AdminCalendarSettings } from '@/app/components/AdminCalendarSettings';
@@ -14,7 +14,9 @@ export default function CalendarSettingsPage() {
       <UrgentBanner />
       <Navbar />
       <div className="pt-32 pb-20">
-        <AdminCalendarSettings onBack={() => router.push('/admin')} />
+        <Suspense fallback={<div className="p-8">Loading calendar settings...</div>}>
+          <AdminCalendarSettings onBack={() => router.push('/admin')} />
+        </Suspense>
       </div>
     </div>
   );

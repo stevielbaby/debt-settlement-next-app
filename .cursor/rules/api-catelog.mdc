@@ -1,0 +1,445 @@
+# Cursor Rule — API Endpoints Catalog (Single-Tenant Law Firm App)
+
+## Description
+
+This rule defines the **canonical API surface area** for the single-tenant Law Firm Intake system (Next.js App Router route handlers). It exists to prevent endpoint drift and to keep implementation **contract-first** so the project can later generate **Zod contracts + OpenAPI** reliably.
+
+**Hard constraints:**
+
+* Implement endpoints following the **paths and semantics** in this catalog.
+* Do **not** invent new routes, rename routes, or change auth boundaries unless the catalog is explicitly updated.
+* All endpoints must use a **consistent error envelope**.
+* IDs are UUIDs (`leadId`, `caseId`, `noteId`, `documentId`, `bookingId`, `inviteId`, `planId`, etc). `caseNumber` is a monotonic integer.
+* Firm-owned resources must remain **`firmId` scoped** in handlers and DB queries where ownership matters. Single-tenant deployments may omit `firmId` where it adds complexity without value.
+
+---
+
+## Pattern (files this rule applies to)
+
+* `app/api/**/*.{ts,js}`
+* `src/app/api/**/*.{ts,js}`
+* `lib/api/**/*.{ts,js}`
+* `server/api/**/*.{ts,js}`
+* `schemas/**/*.{ts,js}`
+* `contracts/**/*.{ts,js}`
+* `openapi/**/*.{json,yaml,yml}`
+
+---
+
+## Global Conventions (must apply to all endpoints)
+
+### Base URL
+
+* Dev base URL: `http://localhost:3000`
+
+### Auth
+
+* **Public**: no session required
+* **Operator**: authenticated session + role `OPERATOR`
+* **Webmaster**: authenticated session + role `WEBMASTER`
+
+### Error Envelope (required)
+
+All non-2xx failures return:
+
+```json
+{ "success": false, "error": { "code": "ERROR_CODE", "message": "Human readable", "details": {} } }
+```
+
+**Error Code Conventions:**
+- Use `SCREAMING_SNAKE_CASE` for error codes
+- Common codes: `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_ERROR`
+- Business-specific codes: `DUPLICATE_INTAKE`, `CASE_NOT_FOUND`, `LEAD_ALREADY_CONVERTED`
+
+Success responses may include `{ "success": true }` optionally.
+
+### Tenant/Firm Scope
+
+* Single-tenant now, but endpoints that read/write firm-owned objects must:
+
+  * determine firm (singleton) and/or operator firm
+  * enforce firm scoping in DB queries using `firmId`
+
+### IDs
+
+* All `*Id` values are UUIDs.
+* `caseNumber` is integer (monotonic per firm), rendered as string in UI if needed.
+
+---
+
+## Canonical Endpoints (do not deviate)
+
+### 1) Public Intake + Booking (Unauthenticated)
+
+#### 1.1 Create Intake Submission (Lead)
+
+* **POST** `/api/intake/submit`
+* **Auth**: Public
+* **Rules**
+
+  * Reject if **active case exists** for submitted email (friendly message)
+  * Reject if **convertible lead exists** for email (friendly message)
+  * Friendly message must be: **“We already have your request.”**
+  * No attachments
+* **Request**
+
+  * `leadType` may be sent OR inferred by form route: `DEBT_SETTLEMENT | BANKRUPTCY`
+  * `contact`: name/email/phone
+  * `intakePayload`: versioned JSON blob
+* **Response**
+
+  * `leadId`, `leadStatus`
+
+#### 1.2 Get Available Booking Slots
+
+* **GET** `/api/public/booking/slots?start=YYYY-MM-DD&days=14`
+* **Auth**: Public
+* **Rules**
+
+  * Firm timezone is source of truth
+  * Availability is derived from:
+
+    1. operator booking windows
+    2. Google free/busy
+    3. internal booked slots table
+
+#### 1.3 Create Booking (Requires Lead)
+
+* **POST** `/api/public/booking/create`
+* **Auth**: Public
+* **Rules**
+
+  * Requires `leadId`
+  * Only one appointment type: 30 minutes
+  * No public cancel/reschedule
+  * Must validate slot availability atomically (prevent double booking)
+* **Response**
+
+  * `bookingId`, `startAt`, `endAt`, `status`
+
+#### 1.4 Booking Confirmation Lookup (Optional)
+
+* **GET** `/api/public/booking/:bookingId`
+* **Auth**: Public
+
+---
+
+### 2) Auth + Invitations
+
+#### 2.1 Request Invite Code (Webmaster)
+
+* **POST** `/api/webmaster/invites/create`
+* **Auth**: Webmaster
+* **Rules**
+
+  * Role embedded in invite (OPERATOR only for single-tenant)
+  * Expires in 10 days
+  * Cannot revoke
+* **Request** `{ email, role }`
+* **Response** `{ inviteId, code }`
+
+#### 2.2 Validate Invite Code (Public)
+
+* **POST** `/api/auth/invite/validate`
+* **Auth**: Public
+* **Request** `{ email, code }`
+* **Response** `{ valid: true, role, expiresAt }`
+
+#### 2.3 Signup (Invite Required)
+
+* **POST** `/api/auth/signup`
+* **Auth**: Public
+* **Rules**
+
+  * Signup email must match invite issued email (normalized)
+  * Log failed attempts (mismatch, invalid, expired, etc.)
+  * Creates user as OPERATOR
+* **Request** `{ email, password, name, code }`
+* **Response** `{ userId }`
+
+#### 2.4 Signin / Session (logical capabilities)
+
+* **POST** `/api/auth/signin` (or NextAuth equivalent)
+* **GET** `/api/auth/session`
+* **POST** `/api/auth/signout`
+
+---
+
+### 3) Operator Dashboard: Leads
+
+#### 3.1 List Leads
+
+* **GET** `/api/operator/leads?status=...&from=...&to=...&minDebt=...&maxDebt=...&q=...`
+* **Auth**: Operator
+* **Filters**
+
+  * received date range
+  * debt amount (bucket or numeric)
+  * status
+  * search by name/email
+* **Response** paginated list
+
+#### 3.2 Get Lead Detail
+
+* **GET** `/api/operator/leads/:leadId`
+* **Auth**: Operator
+
+#### 3.3 Reject / Archive Lead (Optional)
+
+* **POST** `/api/operator/leads/:leadId/reject`
+* **Auth**: Operator
+
+#### 3.4 Convert Lead → Case
+
+* **POST** `/api/operator/leads/:leadId/convert-to-case`
+* **Auth**: Operator
+* **Rules**
+
+  * Create case snapshot from lead (case does not change if lead changes later)
+  * Assign next sequential `caseNumber` per firm
+  * Block if active case exists for lead email
+* **Response** `{ caseId, caseNumber }`
+
+---
+
+### 4) Operator Dashboard: Cases
+
+#### 4.1 List Cases
+
+* **GET** `/api/operator/cases?status=...&from=...&to=...&q=...`
+* **Auth**: Operator
+* **Response** paginated list
+
+#### 4.2 Create Case (Manual)
+
+* **POST** `/api/operator/cases/create`
+* **Auth**: Operator
+* **Rules**
+
+  * Minimum: name + email
+  * Assign sequential `caseNumber`
+  * Block if active case exists for email
+  * `leadId` nullable
+* **Response** `{ caseId, caseNumber }`
+
+#### 4.3 Get Case Detail
+
+* **GET** `/api/operator/cases/:caseId`
+* **Auth**: Operator
+
+#### 4.4 Update Case Status
+
+* **POST** `/api/operator/cases/:caseId/status`
+* **Auth**: Operator
+* **Allowed** `ACTIVE | CLOSED`
+
+#### 4.5 Case Search (Optional alias)
+
+* **GET** `/api/operator/cases/search?q=...`
+* **Auth**: Operator
+
+---
+
+### 5) Operator Dashboard: Notes
+
+#### 5.1 List Notes for Case
+
+* **GET** `/api/operator/cases/:caseId/notes`
+* **Auth**: Operator
+
+#### 5.2 Create Note
+
+* **POST** `/api/operator/cases/:caseId/notes`
+* **Auth**: Operator
+* **Request** `{ body }`
+
+#### 5.3 Delete Note (Soft delete)
+
+* **DELETE** `/api/operator/notes/:noteId`
+* **Auth**: Operator
+
+---
+
+### 6) Operator Dashboard: Documents
+
+#### 6.1 Request Upload URL
+
+* **POST** `/api/operator/cases/:caseId/documents/upload-url`
+* **Auth**: Operator
+* **Rules**
+
+  * Only PDF/JPG/JPEG/PNG
+  * Max 5MB
+  * Track bytes + count
+* **Response** `{ uploadUrl, documentId }` OR `{ presignedUrl, fields }`
+
+#### 6.2 Finalize Upload
+
+* **POST** `/api/operator/documents/:documentId/finalize`
+* **Auth**: Operator
+
+#### 6.3 List Case Documents
+
+* **GET** `/api/operator/cases/:caseId/documents`
+* **Auth**: Operator
+
+#### 6.4 Delete Document (Soft delete + storage decrement)
+
+* **DELETE** `/api/operator/documents/:documentId`
+* **Auth**: Operator
+
+---
+
+### 7) Operator Settings
+
+#### 7.1 Get Firm Public Contact Info
+
+* **GET** `/api/operator/settings/public-contact`
+* **Auth**: Operator
+
+#### 7.2 Update Firm Public Contact Info
+
+* **POST** `/api/operator/settings/public-contact`
+* **Auth**: Operator
+* **Fields** `publicEmail`, `publicPhone`
+
+#### 7.3 Calendar Connection Status
+
+* **GET** `/api/operator/settings/calendar/status`
+* **Auth**: Operator
+
+#### 7.4 Set Booking Windows
+
+* **POST** `/api/operator/settings/calendar/booking-windows`
+* **Auth**: Operator
+
+---
+
+### 8) Billing (Operator)
+
+#### 8.1 Available Plans
+
+* **GET** `/api/operator/billing/available-plans`
+* **Auth**: Operator
+
+#### 8.2 Create Checkout Session
+
+* **POST** `/api/operator/billing/create-checkout-session`
+* **Auth**: Operator
+* **Rules** one active subscription at a time
+* **Response** `{ url }`
+
+#### 8.3 Billing Success Confirmation
+
+* **POST** `/api/operator/billing/confirm-subscription`
+* **Auth**: Operator
+* **Request** `{ sessionId }`
+
+#### 8.4 Subscription Status
+
+* **GET** `/api/operator/billing/subscription-status`
+* **Auth**: Operator
+
+#### 8.5 Cancel Subscription
+
+* **POST** `/api/operator/billing/cancel`
+* **Auth**: Operator
+
+#### 8.6 Customer Portal Link (Optional)
+
+* **POST** `/api/operator/billing/customer-portal`
+* **Auth**: Operator
+* **Response** `{ url }`
+
+---
+
+### 9) Stripe Webhooks (Server-to-Server)
+
+#### 9.1 Stripe Webhook Receiver
+
+* **POST** `/api/webhooks/stripe`
+* **Rules**
+
+  * Verify Stripe signature
+  * Store webhook audit row (success/failure)
+  * Ensure idempotency (eventId)
+* **Events**
+
+  * `checkout.session.completed`
+  * `customer.subscription.created/updated/deleted`
+  * `invoice.paid/payment_failed/finalized`
+
+---
+
+### 10) Webmaster Portal
+
+#### 10.1 View Firm Summary
+
+* **GET** `/api/webmaster/firm`
+* **Auth**: Webmaster
+
+#### 10.2 Plan Sync from Stripe Catalog
+
+* **POST** `/api/webmaster/plans/sync-stripe`
+* **Auth**: Webmaster
+
+#### 10.3 List Subscriptions
+
+* **GET** `/api/webmaster/subscriptions`
+* **Auth**: Webmaster
+
+#### 10.4 Cancel Firm Subscription (Admin override)
+
+* **POST** `/api/webmaster/subscriptions/cancel`
+* **Auth**: Webmaster
+
+#### 10.5 Usage Rollups
+
+* **GET** `/api/webmaster/usage/daily?from=YYYY-MM-DD&to=YYYY-MM-DD`
+* **Auth**: Webmaster
+
+#### 10.6 Operator Invites List (Audit)
+
+* **GET** `/api/webmaster/invites?status=active|used|expired`
+* **Auth**: Webmaster
+
+#### 10.7 Invite Attempt Logs
+
+* **GET** `/api/webmaster/invites/attempts?from=...&to=...`
+* **Auth**: Webmaster
+
+---
+
+### 11) Internal / Tooling (Dev-only)
+
+#### 11.1 OpenAPI Spec
+
+* **GET** `/api/openapi`
+* **Auth** optional (recommend webmaster-only)
+
+#### 11.2 Health Check
+
+* **GET** `/api/health`
+* **Auth** none
+
+---
+
+## Endpoint Priorities (Build Order)
+
+1. Public intake submit
+2. Operator auth (invite + signup)
+3. Operator leads list + lead detail
+4. Convert lead → case
+5. Case list + case detail + notes
+6. Booking slots + create booking
+7. Billing (checkout + webhook + status)
+8. Documents pipeline
+9. Webmaster usage rollups + plan sync
+
+---
+
+**End of rule**
+
+---
+alwaysApply: true
+---

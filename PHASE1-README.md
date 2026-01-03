@@ -106,8 +106,8 @@ This will:
     /signin               - Login page
     /error                - Auth error page
 /scripts
-  init-db.sql            - Database schema
-  run-migration.ts       - Migration runner
+  [Prisma-managed]       - Database schema via prisma/schema.prisma
+  [Prisma migrations]    - Database migrations via prisma/migrations/
 auth.ts                  - Auth.js configuration
 auth.d.ts                - TypeScript types
 middleware.ts            - Route protection

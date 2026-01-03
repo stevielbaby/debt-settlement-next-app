@@ -1,44 +1,108 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Scale, ArrowRight } from 'lucide-react';
+import { Scale, ArrowRight, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+// Helper function to convert debt amount text to number
+const convertDebtAmountToNumber = (debtAmountText: string): number | undefined => {
+  if (!debtAmountText) return undefined;
+
+  switch (debtAmountText) {
+    case 'Under $5,000':
+      return 2500; // Representative value for under $5k
+    case '$5,000 - $15,000':
+      return 10000; // Midpoint of range
+    case 'Over $15,000':
+      return 20000; // Representative value for over $15k
+    default:
+      // Try to parse if it's already a number string
+      const parsed = parseInt(debtAmountText.replace(/[$,]/g, ''));
+      return isNaN(parsed) ? undefined : parsed;
+  }
+};
 
 export const EvaluationForm = ({ onComplete }: { onComplete: (data: any) => void }) => {
   const router = useRouter();
-  const [formData, setFormData] = useState({ 
-    firstName: '', 
-    lastName: '', 
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
     situation: 'Program failed / I am unhappy',
     debtAmount: '',
     email: '',
     phone: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
+
     try {
-      // Call the Next.js API route
-      const response = await fetch('/api/leads', {
+      // Call the new intake submit API
+      const response = await fetch('/api/intake/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          leadType: 'BANKRUPTCY', // This form is for bankruptcy
+          contact: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone,
+          },
+          intakePayload: {
+            situation: formData.situation,
+            debtAmount: formData.debtAmount,
+            // Add any other form data as needed
+          },
+          debtAmount: convertDebtAmountToNumber(formData.debtAmount),
+        })
       });
 
       const result = await response.json();
 
       if (response.ok && result.success) {
         console.log('Lead submitted successfully');
-        onComplete({ ...formData, caseNumber: result.caseNumber });
+        setSubmitSuccess(true);
+
+        // Generate sequential case number (temporary until DB persistence is fixed)
+        const lastCaseNumber = parseInt(localStorage.getItem('lastCaseNumber') || '0');
+        const nextCaseNumber = (lastCaseNumber + 1).toString().padStart(4, '0');
+        localStorage.setItem('lastCaseNumber', nextCaseNumber);
+
+        onComplete({
+          ...formData,
+          caseNumber: nextCaseNumber,
+          leadId: result.leadId,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone
+        });
       } else {
-        throw new Error(result.error || 'Submission failed');
+        // Handle specific error types
+        const errorMessage = result.error?.message || 'Submission failed';
+        if (result.error?.code === 'VALIDATION_ERROR') {
+          setSubmitError('Please check your information and try again. All fields are required.');
+        } else if (result.error?.code === 'DUPLICATE_INTAKE') {
+          setSubmitError('We already have your information on file. Our team will contact you soon.');
+        } else {
+          setSubmitError(errorMessage);
+        }
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error submitting lead:', error);
-      alert('There was an error submitting your information. Please try again.');
+      // Error is already set above, don't show alert
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -137,9 +201,34 @@ export const EvaluationForm = ({ onComplete }: { onComplete: (data: any) => void
             </div>
           </div>
 
-          <button type="submit" className="w-full bg-white text-black font-black uppercase tracking-widest py-4 hover:bg-orange-600 hover:text-white transition-all duration-300 flex items-center justify-center gap-2 group mt-4">
-            Analyze Case <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full bg-white text-black font-black uppercase tracking-widest py-4 hover:bg-orange-600 hover:text-white transition-all duration-300 flex items-center justify-center gap-2 group mt-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Analyzing Case...
+              </>
+            ) : submitSuccess ? (
+              <>
+                <CheckCircle className="w-5 h-5" />
+                Case Submitted
+              </>
+            ) : (
+              <>
+                Analyze Case <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </button>
+
+          {submitError && (
+            <div className="flex items-center gap-2 text-red-400 text-sm mt-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
 
           <p className="text-[10px] text-zinc-600 text-center leading-relaxed max-w-xs mx-auto pt-2">
             Clicking submits your info for legal evaluation. No attorney-client relationship is formed until a retainer is signed.

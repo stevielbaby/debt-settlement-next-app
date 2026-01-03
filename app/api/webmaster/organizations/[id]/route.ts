@@ -1,153 +1,173 @@
-import { auth } from '@/auth';
-import { sql } from '@/app/lib/db';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { prisma } from "@/app/lib/db";
+import { getStripeCustomerId } from "@/lib/stripe-db";
+import { getOrCreateStripeCustomer } from "@/lib/stripe";
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
+
     if (!session?.user || session.user.role !== 'webmaster') {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const orgResult = await sql`
-      SELECT 
-        o.id,
-        o.name,
-        o.email,
-        o.contact_name,
-        o.phone,
-        o.address,
-        os.status as subscription_status,
-        sp.name as plan_name,
-        sp.monthly_limit,
-        COALESCE(um.current_month_count, 0) as current_usage,
-        o.created_at
-      FROM app.organizations o
-      LEFT JOIN app.organization_subscriptions os ON o.id = os.organization_id
-      LEFT JOIN app.subscription_plans sp ON os.plan_id = sp.id
-      LEFT JOIN app.usage_metrics um ON o.id = um.organization_id 
-        AND um.metric_name = 'case_created'
-        AND um.month_year = to_char(CURRENT_DATE, 'YYYY-MM')
-      WHERE o.id = ${params.id}
-    `;
+    const { id } = await params;
 
-    if (orgResult.length === 0) {
+    // Get organization with subscription data
+    const organization = await prisma.firm.findUnique({
+      where: { id },
+      include: {
+        subscriptions: {
+          include: {
+            plan: true
+          }
+        },
+        users: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            createdAt: true
+          }
+        }
+      }
+    });
+
+    if (!organization) {
       return NextResponse.json(
-        { success: false, error: 'Organization not found' },
+        { success: false, error: "Organization not found" },
         { status: 404 }
       );
     }
 
-    const orgRow = orgResult[0];
-    const organization = {
-      id: orgRow.id,
-      name: orgRow.name,
-      email: orgRow.email,
-      contact_name: orgRow.contact_name,
-      phone: orgRow.phone,
-      address: orgRow.address,
-      subscription_status: orgRow.subscription_status || 'inactive',
-      plan_name: orgRow.plan_name || 'Free',
-      monthly_limit: parseInt(orgRow.monthly_limit) || 10,
-      current_usage: parseInt(orgRow.current_usage) || 0,
-      created_at: orgRow.created_at,
+    // Check if Stripe customer exists
+    const stripeCustomerId = await getStripeCustomerId(id);
+
+    // Format response
+    const formattedOrg = {
+      id: organization.id,
+      name: organization.name,
+      email: organization.publicEmail,
+      subscription_status: organization.subscriptions?.[0]?.status?.toLowerCase() || 'inactive',
+      plan_name: organization.subscriptions?.[0]?.plan?.name || null,
+      monthly_limit: 100, // TODO: Add to plan model
+      current_usage: 0, // TODO: Calculate from metrics
+      created_at: organization.createdAt.toISOString(),
+      has_stripe_customer: !!stripeCustomerId,
+      stripe_customer_id: stripeCustomerId
     };
 
-    // Get users
-    const usersResult = await sql`
-      SELECT id, email, role, created_at
-      FROM app.users
-      WHERE organization_id = ${params.id}
-      ORDER BY created_at DESC
-    `;
-
-    const users = usersResult.map((row: any) => ({
-      id: row.id,
-      email: row.email,
-      role: row.role,
-      created_at: row.created_at,
+    const formattedUsers = organization.users.map(user => ({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      created_at: user.createdAt.toISOString()
     }));
 
     return NextResponse.json({
       success: true,
-      organization,
-      users,
+      organization: formattedOrg,
+      users: formattedUsers
     });
   } catch (error) {
-    console.error('Organization detail error:', error);
+    console.error("Get organization error:", error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch organization' },
+      { success: false, error: "Failed to fetch organization" },
       { status: 500 }
     );
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
+
     if (!session?.user || session.user.role !== 'webmaster') {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    const { id } = await params;
     const body = await request.json();
-    const { name, email, contact_name, phone, address } = body;
+    const { action } = body;
 
-    const result = await sql`
-      UPDATE app.organizations
-      SET name = COALESCE(${name}, name),
-          email = COALESCE(${email}, email),
-          contact_name = COALESCE(${contact_name}, contact_name),
-          phone = COALESCE(${phone}, phone),
-          address = COALESCE(${address}, address)
-      WHERE id = ${params.id}
-      RETURNING id, name, email, contact_name, phone, address, created_at
-    `;
+    if (action === 'create_stripe_customer') {
+      // Get organization details
+      const organization = await prisma.firm.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          publicEmail: true
+        }
+      });
 
-    if (result.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Organization not found' },
-        { status: 404 }
+      if (!organization) {
+        return NextResponse.json(
+          { success: false, error: "Organization not found" },
+          { status: 404 }
+        );
+      }
+
+      if (!organization.publicEmail) {
+        return NextResponse.json(
+          { success: false, error: "Organization must have a public email to create Stripe customer" },
+          { status: 400 }
+        );
+      }
+
+      // Check if Stripe customer already exists
+      const existingCustomerId = await getStripeCustomerId(id);
+      if (existingCustomerId) {
+        return NextResponse.json(
+          { success: false, error: "Stripe customer already exists for this organization" },
+          { status: 400 }
+        );
+      }
+
+      // Create Stripe customer
+      const stripeCustomer = await getOrCreateStripeCustomer(
+        id,
+        organization.publicEmail,
+        organization.name
       );
-    }
 
-    const organization = result[0];
+      // Save Stripe customer ID to database
+      await prisma.firm.update({
+        where: { id },
+        data: {
+          stripeCustomerId: stripeCustomer.id,
+          updatedAt: new Date()
+        }
+      });
 
-    return NextResponse.json({
-      success: true,
-      organization: {
-        id: organization.id,
-        name: organization.name,
-        email: organization.email,
-        contact_name: organization.contact_name,
-        phone: organization.phone,
-        address: organization.address,
-        created_at: organization.created_at,
-      },
-    });
-  } catch (error: any) {
-    console.error('Organization update error:', error);
-
-    if (error.message?.includes('unique constraint')) {
-      return NextResponse.json(
-        { success: false, error: 'An organization with this email already exists' },
-        { status: 409 }
-      );
+      return NextResponse.json({
+        success: true,
+        message: "Stripe customer created successfully",
+        stripe_customer_id: stripeCustomer.id
+      });
     }
 
     return NextResponse.json(
-      { success: false, error: 'Failed to update organization' },
+      { success: false, error: "Invalid action" },
+      { status: 400 }
+    );
+  } catch (error) {
+    console.error("Organization action error:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to process request" },
       { status: 500 }
     );
   }

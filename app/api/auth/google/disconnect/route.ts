@@ -1,40 +1,22 @@
-import { NextResponse } from 'next/server';
-import { sql } from '@/app/lib/db';
+import { NextRequest, NextResponse } from "next/server";
 
-export async function POST() {
-  try {
-    // Delete the Google connection (but keep bookings for history)
-    const result = await sql`
-      DELETE FROM google_connections WHERE tenant_id = 'default'
-      RETURNING id
-    `;
-
-    if (!result || result.length === 0) {
-      return NextResponse.json(
-        { error: 'No connection found' },
-        { status: 404 }
-      );
+// TEMPORARY: Database access unification in progress
+export async function GET() {
+  return NextResponse.json({
+    success: false,
+    error: {
+      code: "NOT_IMPLEMENTED",
+      message: "Endpoint temporarily unavailable during database unification"
     }
-
-    // Also clear calendar settings
-    await sql`
-      DELETE FROM calendar_settings WHERE tenant_id = 'default'
-    `;
-
-    return NextResponse.json({
-      success: true,
-      message: 'Google Calendar connection removed'
-    });
-
-  } catch (error: any) {
-    console.error('Disconnect error:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to disconnect',
-        message: error.message
-      },
-      { status: 500 }
-    );
-  }
+  }, { status: 503 });
 }
 
+export async function POST() {
+  return NextResponse.json({
+    success: false,
+    error: {
+      code: "NOT_IMPLEMENTED", 
+      message: "Endpoint temporarily unavailable during database unification"
+    }
+  }, { status: 503 });
+}

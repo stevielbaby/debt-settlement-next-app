@@ -1,0 +1,344 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Firm {
+  id                String             @id @default(cuid())
+  name              String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  publicEmail       String?
+  publicPhone       String?
+  stripeCustomerId  String?            @unique
+  cases             Case[]
+  intakeSubmissions IntakeSubmission[]
+  leads             Lead[]
+  users             User[]
+  invites           Invite[]
+  firmCounter       FirmCounter?
+  subscriptions     FirmSubscription[]
+  invoices          Invoice[]
+  usageRollups      UsageDailyRollup[]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  firmId        String
+  email         String
+  name          String?
+  role          String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  passwordHash  String?
+  emailVerified DateTime?
+  firm          Firm      @relation(fields: [firmId], references: [id])
+  accounts      Account[]
+  sessions      Session[]
+  caseNotes     CaseNote[]
+
+  @@unique([firmId, email])
+  @@index([firmId, role])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtokens")
+}
+
+model Lead {
+  id          String             @id @default(cuid())
+  firmId      String
+  type        LeadType
+  email       String
+  fullName    String?
+  phone       String?
+  debtAmount  Int?
+  source      IntakeSource       @default(PUBLIC_FORM)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  status      LeadStatus         @default(NEW)
+  cases       Case?
+  submissions IntakeSubmission[]
+  firm        Firm               @relation(fields: [firmId], references: [id])
+
+  @@index([firmId, email])
+  @@index([firmId, type])
+  @@index([firmId, createdAt])
+}
+
+model IntakeSubmission {
+  id         String   @id @default(cuid())
+  firmId     String
+  leadId     String
+  leadType   LeadType
+  email      String
+  debtAmount Int?
+  payload    Json
+  createdAt  DateTime @default(now())
+  firm       Firm     @relation(fields: [firmId], references: [id])
+  lead       Lead     @relation(fields: [leadId], references: [id])
+
+  @@index([firmId, createdAt])
+  @@index([firmId, email])
+  @@index([firmId, debtAmount])
+  @@index([leadId, createdAt])
+}
+
+model Case {
+  id         String         @id @default(cuid())
+  firmId     String
+  leadId     String         @unique
+  email      String
+  status     CaseStatus     @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  closedAt   DateTime?
+  caseNumber Int?
+  booking    Booking?
+  firm       Firm           @relation(fields: [firmId], references: [id])
+  lead       Lead           @relation(fields: [leadId], references: [id])
+  documents  CaseDocument[]
+  notes      CaseNote[]
+
+  @@index([firmId, email, status])
+  @@index([firmId, createdAt])
+}
+
+model CaseNote {
+  id        String   @id @default(cuid())
+  caseId    String
+  authorId  String?
+  body      String
+  createdAt DateTime @default(now())
+  case      Case     @relation(fields: [caseId], references: [id])
+  author    User?    @relation(fields: [authorId], references: [id])
+
+  @@index([caseId, createdAt])
+}
+
+model CaseDocument {
+  id         String   @id @default(cuid())
+  caseId     String
+  storageKey String
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  createdAt  DateTime @default(now())
+  case       Case     @relation(fields: [caseId], references: [id])
+
+  @@index([caseId, createdAt])
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  caseId          String        @unique
+  startAt         DateTime
+  endAt           DateTime
+  calendarEventId String?
+  status          BookingStatus @default(RESERVED)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  case            Case          @relation(fields: [caseId], references: [id])
+
+  @@index([startAt])
+}
+
+enum LeadType {
+  DEBT_SETTLEMENT
+  BANKRUPTCY
+}
+
+enum CaseStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum IntakeSource {
+  PUBLIC_FORM
+  OPERATOR_CREATED
+}
+
+enum BookingStatus {
+  RESERVED
+  CANCELLED
+}
+
+enum UserRole {
+  WEBMASTER
+  OPERATOR
+  CLIENT
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  ARCHIVED
+}
+
+enum InviteStatus {
+  PENDING
+  USED
+  EXPIRED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  PAUSED
+}
+
+model Invite {
+  id          String      @id @default(cuid())
+  email       String
+  code        String      // Hashed invite code
+  status      InviteStatus @default(PENDING)
+  role        UserRole
+  firmId      String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  firm        Firm?       @relation(fields: [firmId], references: [id])
+
+  @@index([email, status, expiresAt])
+}
+
+model FirmCounter {
+  id            String @id @default(cuid())
+  firmId        String @unique
+  nextCaseNumber Int   @default(1)
+
+  firm          Firm  @relation(fields: [firmId], references: [id])
+
+  @@index([firmId])
+}
+
+model FirmSubscription {
+  id                    String   @id @default(cuid())
+  firmId               String   @unique
+  stripeSubscriptionId String?  @unique
+  stripePriceId        String?
+  status               SubscriptionStatus @default(TRIALING)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  trialEnd             DateTime?
+  cancelAtPeriodEnd    Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  firm                 Firm     @relation(fields: [firmId], references: [id])
+  plan                 StripePlan? @relation(fields: [stripePriceId], references: [stripePriceId])
+}
+
+model StripePlan {
+  id               String  @id @default(cuid())
+  stripeProductId String  @unique
+  stripePriceId   String  @unique
+  name            String
+  description     String?
+  priceCents      Int
+  interval        String  // 'month' | 'year'
+  isActive        Boolean @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions   FirmSubscription[]
+}
+
+model UsageDailyRollup {
+  id             String   @id @default(cuid())
+  firmId        String
+  day           DateTime @db.Date
+  leadsCreated  Int      @default(0)
+  casesCreated  Int      @default(0)
+  bookingsCreated Int    @default(0)
+  fileUploadsCount Int   @default(0)
+  storageBytes  BigInt   @default(0)
+  activeOperators Int    @default(0)
+  webhookFailures Int    @default(0)
+  emailsSent    Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  firm          Firm     @relation(fields: [firmId], references: [id])
+
+  @@unique([firmId, day])
+  @@index([firmId, day])
+}
+
+model WebhookEvent {
+  id               String   @id @default(cuid())
+  eventId         String   @unique
+  eventType       String
+  processed       Boolean  @default(false)
+  errorMessage    String?
+  rawPayload      Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([processed, createdAt])
+}
+
+model Invoice {
+  id               String   @id @default(cuid())
+  firmId          String
+  stripeInvoiceId String?  @unique
+  amount          Int      // cents
+  status          String   // 'draft' | 'open' | 'paid' | 'void' | 'uncollectible'
+  issueDate       DateTime
+  dueDate         DateTime?
+  paidDate        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  firm            Firm     @relation(fields: [firmId], references: [id])
+  @@index([firmId, issueDate])
+}

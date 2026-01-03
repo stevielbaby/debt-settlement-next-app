@@ -1,10 +1,12 @@
 import { auth } from '@/auth';
-import { sql } from '@/app/lib/db';
+import { prisma } from '@/app/lib/db';
 import { NextResponse } from 'next/server';
+import { DEPLOYMENT_CONFIG, isSingleTenant, isMultiTenant } from '@/lib/deployment-config';
 
 export async function GET() {
   try {
     const session = await auth();
+    // @ts-ignore - Extended session properties from auth.d.ts
     if (!session?.user || session.user.role !== 'webmaster') {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -12,40 +14,106 @@ export async function GET() {
       );
     }
 
-    const result = await sql`
-      SELECT 
-        o.id,
-        o.name,
-        o.email,
-        os.status as subscription_status,
-        sp.name as plan_name,
-        sp.monthly_limit,
-        COALESCE(um.current_month_count, 0) as current_usage,
-        o.created_at
-      FROM app.organizations o
-      LEFT JOIN app.organization_subscriptions os ON o.id = os.organization_id
-      LEFT JOIN app.subscription_plans sp ON os.plan_id = sp.id
-      LEFT JOIN app.usage_metrics um ON o.id = um.organization_id 
-        AND um.metric_name = 'case_created'
-        AND um.month_year = to_char(CURRENT_DATE, 'YYYY-MM')
-      ORDER BY o.created_at DESC
-    `;
+    if (isSingleTenant()) {
+      // Single-tenant mode: Return only the singleton organization
+      const singletonOrg = await prisma.firm.findUnique({
+        where: { id: DEPLOYMENT_CONFIG.singletonOrg.id },
+        include: {
+          subscriptions: {
+            include: {
+              plan: true
+            }
+          }
+        }
+      });
 
-    const organizations = result.map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      email: row.email,
-      subscription_status: row.subscription_status || 'inactive',
-      plan_name: row.plan_name || 'Free',
-      monthly_limit: parseInt(row.monthly_limit) || 10,
-      current_usage: parseInt(row.current_usage) || 0,
-      created_at: row.created_at,
-    }));
+      if (!singletonOrg) {
+        // If singleton doesn't exist (shouldn't happen in proper setup), return empty
+        return NextResponse.json({
+          success: true,
+          mode: 'single-tenant',
+          organizations: [],
+          capabilities: {
+            canCreate: false,
+            canEdit: false,
+            canDelete: false,
+            canProvision: false
+          },
+          message: "Singleton organization not found. This deployment may not be properly configured."
+        });
+      }
 
+      const formattedOrg = {
+        id: singletonOrg.id,
+        name: singletonOrg.name,
+        email: singletonOrg.publicEmail,
+        type: 'PRIMARY' as const,
+        isSingleton: true,
+        status: 'active' as const,
+        subscription_status: singletonOrg.subscriptions?.[0]?.status || 'inactive',
+        plan_name: singletonOrg.subscriptions?.[0]?.plan?.name || 'Free',
+        createdAt: singletonOrg.createdAt.toISOString(),
+      };
+
+      return NextResponse.json({
+        success: true,
+        mode: 'single-tenant',
+        organizations: [formattedOrg],
+        capabilities: {
+          canCreate: false,
+          canEdit: false,
+          canDelete: false,
+          canProvision: false
+        },
+        message: "This deployment operates in single-tenant mode. Organization management is handled through system configuration."
+      });
+    }
+
+    if (isMultiTenant()) {
+      // Multi-tenant mode: Return all organizations (when implemented)
+      const organizations = await prisma.firm.findMany({
+        include: {
+          subscriptions: {
+            include: {
+              plan: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      const formattedOrganizations = organizations.map(org => ({
+        id: org.id,
+        name: org.name,
+        email: org.publicEmail,
+        type: 'CLIENT' as const,
+        status: 'active' as const,
+        subscriptions_status: org.subscriptions?.[0]?.status || 'inactive',
+        plan_name: org.subscriptions?.[0]?.plan?.name || 'Free',
+        monthly_limit: 100, // TODO: Add to plan schema
+        current_usage: 0, // TODO: Implement usage tracking
+        createdAt: org.createdAt.toISOString(),
+      }));
+
+      return NextResponse.json({
+        success: true,
+        mode: 'multi-tenant',
+        organizations: formattedOrganizations,
+        capabilities: {
+          canCreate: true,
+          canEdit: true,
+          canDelete: true,
+          canProvision: true
+        }
+      });
+    }
+
+    // Fallback
     return NextResponse.json({
-      success: true,
-      organizations,
-    });
+      success: false,
+      error: 'Invalid deployment configuration'
+    }, { status: 500 });
+
   } catch (error) {
     console.error('Organizations fetch error:', error);
     return NextResponse.json(
@@ -58,6 +126,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await auth();
+    // @ts-ignore - Extended session properties from auth.d.ts
     if (!session?.user || session.user.role !== 'webmaster') {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -65,6 +134,19 @@ export async function POST(request: Request) {
       );
     }
 
+    // Prevent organization creation in single-tenant mode
+    if (isSingleTenant()) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Organization creation is disabled in single-tenant mode',
+          message: 'This deployment operates in single-tenant mode. Organization management is handled through system configuration.'
+        },
+        { status: 403 }
+      );
+    }
+
+    // Multi-tenant organization creation (when implemented)
     const { name, email } = await request.json();
 
     if (!name || !email) {
@@ -74,21 +156,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await sql`
-      INSERT INTO app.organizations (name, email)
-      VALUES (${name}, ${email})
-      RETURNING id, name, email, created_at
-    `;
-
-    const organization = result[0];
+    const organization = await prisma.firm.create({
+      data: {
+        name,
+        publicEmail: email
+      },
+      select: {
+        id: true,
+        name: true,
+        publicEmail: true,
+        createdAt: true
+      }
+    });
 
     return NextResponse.json({
       success: true,
       organization: {
         id: organization.id,
         name: organization.name,
-        email: organization.email,
-        created_at: organization.created_at,
+        email: organization.publicEmail,
+        created_at: organization.createdAt,
       },
     });
   } catch (error: any) {

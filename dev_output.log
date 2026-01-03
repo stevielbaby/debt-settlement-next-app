@@ -1,0 +1,153 @@
+
+> next-app@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.127:3000
+- Environments: .env.local, .env
+
+✓ Starting...
+Creating turbopack project { dir: '/Users/steviel/debt-settlement-next-app', testMode: true }
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 730ms
+ GET /dashboard?caseNumber=0001&firstName=dfg&lastName=dfg&email=q%40q.com&phone=1234567890&situation=Settlement+Program+Failure 200 in 769ms (compile: 477ms, proxy.ts: 98ms, render: 194ms)
+ GET /case-review 200 in 788ms (compile: 592ms, proxy.ts: 111ms, render: 85ms)
+Get status error: Error [NeonDbError]: Error connecting to database: TypeError: fetch failed
+    at async GET (app/api/calendar/connection-status/route.ts:7:25)
+   5 |   try {
+   6 |     // Get Google connection status
+>  7 |     const connections = await sql`
+     |                         ^
+   8 |       SELECT account_email, created_at FROM google_connections WHERE tenant_id = 'default'
+   9 |     `;
+  10 | {
+  severity: undefined,
+  code: undefined,
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: undefined,
+  line: undefined,
+  routine: undefined,
+  sourceError: TypeError: fetch failed
+      at async GET (app/api/calendar/connection-status/route.ts:7:25)
+     5 |   try {
+     6 |     // Get Google connection status
+  >  7 |     const connections = await sql`
+       |                         ^
+     8 |       SELECT account_email, created_at FROM google_connections WHERE tenant_id = 'default'
+     9 |     `;
+    10 | {
+    [cause]: AggregateError: 
+        at ignore-listed frames {
+      code: 'ECONNREFUSED'
+    }
+  }
+}
+ GET /api/calendar/connection-status 500 in 319ms (compile: 82ms, proxy.ts: 19ms, render: 218ms)
+Get status error: Error [NeonDbError]: Error connecting to database: TypeError: fetch failed
+    at async GET (app/api/calendar/connection-status/route.ts:7:25)
+   5 |   try {
+   6 |     // Get Google connection status
+>  7 |     const connections = await sql`
+     |                         ^
+   8 |       SELECT account_email, created_at FROM google_connections WHERE tenant_id = 'default'
+   9 |     `;
+  10 | {
+  severity: undefined,
+  code: undefined,
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: undefined,
+  line: undefined,
+  routine: undefined,
+  sourceError: TypeError: fetch failed
+      at async GET (app/api/calendar/connection-status/route.ts:7:25)
+     5 |   try {
+     6 |     // Get Google connection status
+  >  7 |     const connections = await sql`
+       |                         ^
+     8 |       SELECT account_email, created_at FROM google_connections WHERE tenant_id = 'default'
+     9 |     `;
+    10 | {
+    [cause]: AggregateError: 
+        at ignore-listed frames {
+      code: 'ECONNREFUSED'
+    }
+  }
+}
+ GET /api/calendar/connection-status 500 in 153ms (compile: 2ms, proxy.ts: 7ms, render: 145ms)
+Get status error: Error [NeonDbError]: Error connecting to database: TypeError: fetch failed
+    at async GET (app/api/calendar/connection-status/route.ts:7:25)
+   5 |   try {
+   6 |     // Get Google connection status
+>  7 |     const connections = await sql`
+     |                         ^
+   8 |       SELECT account_email, created_at FROM google_connections WHERE tenant_id = 'default'
+   9 |     `;
+  10 | {
+  severity: undefined,
+  code: undefined,
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: undefined,
+  line: undefined,
+  routine: undefined,
+  sourceError: TypeError: fetch failed
+      at async GET (app/api/calendar/connection-status/route.ts:7:25)
+     5 |   try {
+     6 |     // Get Google connection status
+  >  7 |     const connections = await sql`
+       |                         ^
+     8 |       SELECT account_email, created_at FROM google_connections WHERE tenant_id = 'default'
+     9 |     `;
+    10 | {
+    [cause]: AggregateError: 
+        at ignore-listed frames {
+      code: 'ECONNREFUSED'
+    }
+  }
+}
+ GET /api/calendar/connection-status 500 in 146ms (compile: 2ms, proxy.ts: 6ms, render: 138ms)
+✓ Compiled in 45ms
+✓ Compiled in 108ms
+✓ Compiled in 124ms
+✓ Compiled in 87ms
+ POST /api/intake/submit 400 in 546ms (compile: 257ms, proxy.ts: 141ms, render: 148ms)
+ POST /api/intake/submit 409 in 36ms (compile: 5ms, proxy.ts: 18ms, render: 13ms)
+ POST /api/intake/submit 400 in 29ms (compile: 4ms, proxy.ts: 9ms, render: 16ms)
+ POST /api/intake/submit 409 in 22ms (compile: 3ms, proxy.ts: 10ms, render: 9ms)
+ GET /case-review 200 in 130ms (compile: 11ms, proxy.ts: 18ms, render: 101ms)
+ GET /case-review 200 in 69ms (compile: 7ms, proxy.ts: 21ms, render: 42ms)
+ GET / 200 in 63ms (compile: 27ms, proxy.ts: 24ms, render: 12ms)
+ GET / 200 in 90ms (compile: 3ms, proxy.ts: 21ms, render: 66ms)
+ GET / 200 in 80ms (compile: 6ms, proxy.ts: 12ms, render: 62ms)
+ GET / 200 in 89ms (compile: 4ms, proxy.ts: 21ms, render: 65ms)
+[?25h

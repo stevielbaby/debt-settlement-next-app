@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { sql } from "@/app/lib/db";
+import { prisma } from "@/app/lib/db";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -17,44 +17,42 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
-          // Ensure we query from the dedicated app schema
-          const result = await sql`
-            SELECT id, email, password_hash, name, role, org_id, status
-            FROM app.users
-            WHERE email = ${credentials.email as string}
-            AND status = 'active'
-            LIMIT 1
-          `;
+          // Query user from Prisma (now the single source of truth)
+          const user = await prisma.user.findFirst({
+            where: {
+              email: credentials.email as string,
+            },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              role: true,
+              firmId: true,
+              passwordHash: true,
+            }
+          });
 
-          const user = result[0];
-
-          if (!user) {
+          if (!user || !user.passwordHash) {
             return null;
           }
 
           const isValid = await bcrypt.compare(
             credentials.password as string,
-            user.password_hash
+            user.passwordHash
           );
 
           if (!isValid) {
             return null;
           }
 
-          // Update last login
-          await sql`
-            UPDATE app.users
-            SET last_login_at = NOW()
-            WHERE id = ${user.id}
-          `;
-
           return {
             id: user.id,
             email: user.email,
             name: user.name,
             role: user.role,
-            orgId: user.org_id,
+            orgId: user.firmId,
           };
+
         } catch (error) {
           console.error("Auth error:", error);
           return null;
@@ -66,7 +64,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        // @ts-ignore - Extended user properties from auth.d.ts
         token.role = user.role;
+        // @ts-ignore - Extended user properties from auth.d.ts
         token.orgId = user.orgId;
       }
       return token;
@@ -74,7 +74,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        // @ts-ignore - Extended session properties from auth.d.ts
         session.user.role = token.role as string;
+        // @ts-ignore - Extended session properties from auth.d.ts
         session.user.orgId = token.orgId as string | null;
       }
       return session;

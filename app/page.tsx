@@ -27,7 +27,15 @@ export default function HomePage() {
 
   const handleFormSubmit = (data: any) => {
     setUser(data);
-    router.push(`/dashboard?caseNumber=${data.caseNumber}`);
+    const params = new URLSearchParams({
+      caseNumber: data.caseNumber || '0001',
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      email: data.email || '',
+      phone: data.phone || '',
+      situation: data.situation || '',
+    });
+    router.push(`/dashboard?${params.toString()}`);
   };
 
   const navigateToSection = (sectionId: string) => {

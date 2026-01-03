@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Scale, Lock, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
@@ -52,19 +52,39 @@ export default function SignInPage() {
       } else if (result?.ok) {
         // If no callback URL specified, redirect based on user role
         if (!callbackUrl || callbackUrl === '/') {
-          // Fetch the user's role to determine redirect
+          // Small delay to ensure session is established, then fetch role
+          await new Promise(resolve => setTimeout(resolve, 100));
+
           try {
             const response = await fetch('/api/auth/user-role');
             const data = await response.json();
-            if (data.role === 'webmaster') {
+            if (data.success && data.role) {
+              if (data.role === 'webmaster') {
+                router.push('/webmaster');
+              } else if (data.role === 'operator') {
+                router.push('/operator');
+              } else {
+                router.push('/dashboard');
+              }
+            } else {
+              // Fallback: redirect to a role-based URL we can determine from email
+              if (email.includes('webmaster')) {
+                router.push('/webmaster');
+              } else if (email.includes('operator')) {
+                router.push('/operator');
+              } else {
+                router.push('/dashboard');
+              }
+            }
+          } catch {
+            // Final fallback: redirect based on email pattern
+            if (email.includes('webmaster')) {
               router.push('/webmaster');
-            } else if (data.role === 'operator') {
+            } else if (email.includes('operator')) {
               router.push('/operator');
             } else {
               router.push('/dashboard');
             }
-          } catch {
-            router.push(callbackUrl || '/');
           }
         } else {
           router.push(callbackUrl);
@@ -175,7 +195,7 @@ export default function SignInPage() {
               }}
               className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 font-bold uppercase tracking-wider text-xs transition-all border border-zinc-700 hover:border-orange-600"
             >
-              📋 Try Operator Account
+              📋 Operator Dashboard
             </button>
             <p className="text-[10px] text-zinc-600 text-center mt-2">Auto-fills and submits</p>
           </div>
@@ -188,5 +208,13 @@ export default function SignInPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <SignInForm />
+    </Suspense>
   );
 }

@@ -50,7 +50,9 @@ export default function CaseDetailPage() {
           const found = json.cases.find((c: any) => c.id === caseId) || json.cases[0];
           setData(found || null);
         } else {
-          setError(json.error || "Failed to load case");
+          // Extract message from error object, fallback to generic message
+          const errorMessage = json.error?.message || json.error || "Failed to load case";
+          setError(errorMessage);
         }
       } catch (err) {
         console.error("Failed to load case", err);
@@ -74,7 +76,9 @@ export default function CaseDetailPage() {
       });
       const json = await res.json();
       if (!res.ok || !json.success) {
-        setError(json.error || "Update failed");
+        // Extract message from error object, fallback to generic message
+        const errorMessage = json.error?.message || json.error || "Update failed";
+        setError(errorMessage);
         return;
       }
       if (json.case) {
@@ -131,8 +135,10 @@ export default function CaseDetailPage() {
         setNotes((prev) => [json.note, ...prev]);
         setNewNote("");
       } else {
-        setError(json.error || "Failed to post note");
-      }
+      // Extract message from error object, fallback to generic message
+      const errorMessage = json.error?.message || json.error || "Failed to post note";
+      setError(errorMessage);
+    }
     } catch (err) {
       console.error("Failed to submit note", err);
       setError("Failed to post note");

@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Database, Search, Calendar, Mail, Phone, FileText, RefreshCw, Clock, CheckCircle2, Plus, Briefcase } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft, Database, Search, Calendar, Mail, Phone, FileText, RefreshCw, Clock, CheckCircle2, Plus, Briefcase, Eye } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { extractErrorMessage } from '@/lib/error-utils';
 
 interface Lead {
   id: number;
@@ -40,7 +42,7 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
       if (response.ok && result.success) {
         setLeads(result.leads);
       } else {
-        throw new Error(result.error || 'Failed to fetch submissions');
+        throw new Error(extractErrorMessage(result.error) || 'Failed to fetch submissions');
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -56,22 +58,38 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
     try {
       setConverting(selectedLead.id);
       setShowModal(false);
-      const response = await fetch('/api/operator/cases/convert', {
+
+      console.log('Converting lead:', selectedLead.id, selectedLead.email);
+
+      const response = await fetch(`/api/operator/leads/${selectedLead.id}/convert-to-case`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId: selectedLead.id }),
       });
 
       const result = await response.json();
+      console.log('Conversion response:', response.status, response.ok, result);
 
       if (response.ok && result.success) {
         // Remove the converted lead from the list
         setLeads(leads.filter(l => l.id !== selectedLead.id));
+        // Redirect to the new case if available
+        if (result.caseId) {
+          router.push(`/operator/cases/${result.caseId}`);
+        }
       } else {
-        throw new Error(result.error || 'Failed to create case');
+        // More specific error handling
+        const errorMessage = result.error?.message || 'Failed to create case';
+        console.error('Conversion failed:', errorMessage, result.error);
+
+        // Show user-friendly error
+        alert(`Unable to convert lead: ${errorMessage}`);
+
+        // Re-show the modal if it was a validation error
+        setShowModal(true);
       }
     } catch (err) {
       console.error('Conversion error:', err);
+      alert('Network error occurred. Please try again.');
+      setShowModal(true);
     } finally {
       setConverting(null);
       setSelectedLead(null);
@@ -257,23 +275,32 @@ export const SubmissionsReview = ({ onBack }: { onBack?: () => void }) => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <button
-                          onClick={() => openConfirmModal(lead)}
-                          disabled={converting === lead.id}
-                          className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {converting === lead.id ? (
-                            <>
-                              <RefreshCw size={12} className="animate-spin" />
-                              Creating...
-                            </>
-                          ) : (
-                            <>
-                              <Briefcase size={12} />
-                              Create Case
-                            </>
-                          )}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/operator/leads/${lead.id}`}
+                            className="flex items-center gap-2 px-3 py-1 border border-zinc-700 text-zinc-400 text-[10px] font-bold uppercase tracking-widest hover:text-white hover:border-zinc-500 transition-all"
+                          >
+                            <Eye size={12} />
+                            View
+                          </Link>
+                          <button
+                            onClick={() => openConfirmModal(lead)}
+                            disabled={converting === lead.id}
+                            className="flex items-center gap-2 px-3 py-1 bg-orange-600 hover:bg-orange-500 text-white text-[10px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {converting === lead.id ? (
+                              <>
+                                <RefreshCw size={12} className="animate-spin" />
+                                Creating...
+                              </>
+                            ) : (
+                              <>
+                                <Briefcase size={12} />
+                                Case
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

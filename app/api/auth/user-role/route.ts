@@ -14,6 +14,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
+      // @ts-ignore - Extended session properties from auth.d.ts
       role: session.user.role,
       email: session.user.email,
     });
