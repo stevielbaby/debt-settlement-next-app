@@ -46,8 +46,6 @@ export default function OperatorPaymentsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelType, setCancelType] = useState<'immediate' | 'end_of_period'>('end_of_period');
 
-  const hasActiveSubscription = subscription && (subscription.status === 'active' || subscription.status === 'trialing' || subscription.status === 'incomplete');
-
   useEffect(() => {
     // Check URL parameters for checkout results
     const urlParams = new URLSearchParams(window.location.search);
@@ -83,6 +81,31 @@ export default function OperatorPaymentsPage() {
       const response = await fetch('/api/operator/payments');
       const data = await response.json();
       
+      // #region agent log - frontend data received
+      fetch('http://127.0.0.1:7242/ingest/1b3163b7-f1ae-4e91-bf21-62593b0c9267', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'app/operator/payments/page.tsx:fetchPaymentInfo',
+          message: 'Payment data received from API',
+          data: {
+            success: data.success,
+            subscription: data.subscription ? {
+              id: data.subscription.id,
+              planName: data.subscription.planName,
+              amount: data.subscription.amount,
+              status: data.subscription.status
+            } : null,
+            availablePlansCount: data.availablePlans?.length || 0
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'initial-run',
+          hypothesisId: 'A,B,E'
+        })
+      }).catch(() => {});
+      // #endregion
+
       if (data.success) {
         setSubscription(data.subscription);
         setInvoices(data.invoices || []);
@@ -188,7 +211,7 @@ export default function OperatorPaymentsPage() {
           <RefreshCw className="animate-spin mr-2" size={20} />
           Loading payment information...
         </div>
-      ) : hasActiveSubscription ? (
+      ) : subscription && (subscription.status === 'active' || subscription.status === 'trialing' || subscription.status === 'incomplete') ? (
         <>
         <div className="space-y-6">
           <div className="bg-zinc-900 border border-zinc-800 p-8">

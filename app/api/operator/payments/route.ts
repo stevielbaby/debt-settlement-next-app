@@ -42,6 +42,7 @@ export async function GET() {
             where: { firmId: organizationId },
             update: {
               stripeSubscriptionId: stripeSubscription.id,
+              stripePriceId: stripeSubscription.items.data[0]?.price.id,
               status: stripeSubscription.status.toUpperCase() as any,
               currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
               currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
