@@ -14,6 +14,7 @@ interface SubscriptionInfo {
   caseLimit: number;
   currentUsage: number;
   usagePercentage: number;
+  cancelAtPeriodEnd: boolean;
 }
 
 interface InvoiceInfo {
@@ -94,7 +95,8 @@ export default function OperatorPaymentsPage() {
               id: data.subscription.id,
               planName: data.subscription.planName,
               amount: data.subscription.amount,
-              status: data.subscription.status
+              status: data.subscription.status,
+              cancelAtPeriodEnd: data.subscription.cancelAtPeriodEnd
             } : null,
             availablePlansCount: data.availablePlans?.length || 0
           },
@@ -230,17 +232,23 @@ export default function OperatorPaymentsPage() {
                 </div>
                 <div className="text-right">
                   <div className={`text-xs px-3 py-1 rounded uppercase tracking-widest ${
-                    subscription.status === 'active'
+                    subscription.cancelAtPeriodEnd
+                      ? 'bg-orange-900/20 text-orange-500'
+                      : subscription.status === 'active'
                       ? 'bg-green-900/20 text-green-500'
                       : 'bg-zinc-800 text-zinc-400'
                   }`}>
-                    {subscription.status}
+                    {subscription.cancelAtPeriodEnd ? 'CANCELLING' : subscription.status}
                   </div>
-                  {subscription.daysUntilRenewal > 0 && (
+                  {subscription.cancelAtPeriodEnd ? (
+                    <p className="text-xs text-orange-400 mt-1 font-medium">
+                      ⚠️ Ends on {subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'period end'}
+                    </p>
+                  ) : subscription.daysUntilRenewal > 0 ? (
                     <p className="text-xs text-zinc-500 mt-1">
                       Renews in {subscription.daysUntilRenewal} days
                     </p>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
@@ -268,7 +276,10 @@ export default function OperatorPaymentsPage() {
               <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-lg max-w-md w-full mx-4">
                 <h3 className="text-lg font-semibold text-white mb-4">Cancel Subscription</h3>
                 <p className="text-zinc-400 mb-6">
-                  Are you sure you want to cancel your subscription? This action cannot be undone.
+                  {cancelType === 'end_of_period'
+                    ? `Your subscription will remain active until ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'the end of your current billing period'}. After that date, you will lose access and need to subscribe again to continue using the service.`
+                    : 'Your subscription will end immediately and you will lose access right away. This action cannot be undone.'
+                  }
                 </p>
 
                 <div className="space-y-3 mb-6">
@@ -323,7 +334,10 @@ export default function OperatorPaymentsPage() {
 
                         if (data.success) {
                           setShowCancelDialog(false);
-                          setSuccessMessage('Subscription cancelled successfully');
+                          const message = cancelType === 'end_of_period'
+                            ? `Subscription will end on ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'your billing period end date'}. You'll keep access until then.`
+                            : 'Subscription cancelled successfully. Access ended immediately.';
+                          setSuccessMessage(message);
                           fetchPaymentInfo(); // Refresh data
                         } else {
                           alert(`Error: ${data.error || 'Failed to cancel subscription'}`);
