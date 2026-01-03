@@ -16,6 +16,8 @@ async function handleSubscriptionEvent(event: any) {
   const subscription = event.data.object;
   const stripeCustomerId = subscription.customer;
 
+  console.log(`🔄 Processing subscription ${subscription.id} with status ${subscription.status} for customer ${stripeCustomerId}`);
+
   // Find the organization by Stripe customer ID
   const firm = await prisma.firm.findFirst({
     where: { stripeCustomerId },
@@ -23,7 +25,7 @@ async function handleSubscriptionEvent(event: any) {
   });
 
   if (!firm) {
-    console.error(`No firm found for Stripe customer ${stripeCustomerId}`);
+    console.error(`❌ No firm found for Stripe customer ${stripeCustomerId}`);
     return;
   }
 
@@ -31,33 +33,47 @@ async function handleSubscriptionEvent(event: any) {
   const priceId = subscription.items.data[0]?.price?.id;
   const plan = await prisma.stripePlan.findFirst({
     where: { stripePriceId: priceId },
-    select: { id: true }
+    select: { id: true, name: true, priceCents: true }
   });
 
-  // Update or create subscription record
-  await prisma.firmSubscription.upsert({
-    where: { firmId: firm.id },
-    update: {
-      stripeSubscriptionId: subscription.id,
-      status: subscription.status.toUpperCase(),
-      currentPeriodStart: new Date(subscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      stripePriceId: priceId,
-      cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
-      updatedAt: new Date()
-    },
-    create: {
-      firmId: firm.id,
-      stripeSubscriptionId: subscription.id,
-      stripePriceId: priceId,
-      status: subscription.status.toUpperCase(),
-      currentPeriodStart: new Date(subscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      cancelAtPeriodEnd: subscription.cancel_at_period_end || false
-    }
-  });
+  if (!plan) {
+    console.warn(`⚠️ No plan found for price ID ${priceId}, subscription may not display correctly`);
+  }
 
-  console.log(`Updated subscription ${subscription.id} for firm ${firm.id}`);
+  try {
+    // Update or create subscription record
+    const result = await prisma.firmSubscription.upsert({
+      where: { firmId: firm.id },
+      update: {
+        stripeSubscriptionId: subscription.id,
+        status: subscription.status.toUpperCase(),
+        currentPeriodStart: new Date(subscription.current_period_start * 1000),
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        stripePriceId: priceId,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+        updatedAt: new Date()
+      },
+      create: {
+        firmId: firm.id,
+        stripeSubscriptionId: subscription.id,
+        stripePriceId: priceId,
+        status: subscription.status.toUpperCase(),
+        currentPeriodStart: new Date(subscription.current_period_start * 1000),
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        cancelAtPeriodEnd: subscription.cancel_at_period_end || false
+      },
+      include: {
+        plan: true
+      }
+    });
+
+    console.log(`✅ Successfully updated subscription ${subscription.id} for firm ${firm.id}`);
+    console.log(`   Status: ${result.status}, Plan: ${result.plan?.name || 'Unknown'}, Price: $${(result.plan?.priceCents || 0) / 100}`);
+
+  } catch (error) {
+    console.error(`❌ Failed to update subscription ${subscription.id} for firm ${firm.id}:`, error);
+    throw error; // Re-throw to mark webhook as failed
+  }
 }
 
 /**

@@ -62,7 +62,18 @@ export default function OperatorPaymentsPage() {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    fetchPaymentInfo();
+    // Check if user just returned from Stripe checkout
+    const checkoutStarted = sessionStorage.getItem('stripe_checkout_started');
+    if (checkoutStarted) {
+      console.log('🔄 Detected return from Stripe checkout, refreshing subscription data...');
+      sessionStorage.removeItem('stripe_checkout_started');
+      // Add a small delay to allow webhook processing
+      setTimeout(() => {
+        fetchPaymentInfo();
+      }, 2000);
+    } else {
+      fetchPaymentInfo();
+    }
   }, []);
 
   const fetchPaymentInfo = async () => {
@@ -376,6 +387,8 @@ export default function OperatorPaymentsPage() {
                           const data = await response.json();
 
                           if (data.success && data.url) {
+                            // Store checkout intent in sessionStorage to detect return
+                            sessionStorage.setItem('stripe_checkout_started', Date.now().toString());
                             // Redirect to Stripe checkout
                             window.location.href = data.url;
                           } else {

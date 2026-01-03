@@ -256,36 +256,46 @@ export async function getSubscriptionStatus(subscriptionId: string) {
  */
 export async function getActiveSubscription(customerId: string) {
   try {
-    // Check for active subscriptions first
+    // Get ALL active subscriptions and return the most recent one
     let subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: "active",
-      limit: 1,
+      limit: 10, // Get more to find the most recent
     });
 
-    if (subscriptions.data[0]) {
-      return subscriptions.data[0];
+    if (subscriptions.data.length > 0) {
+      // Sort by created date (newest first) and return the most recent
+      const sorted = subscriptions.data.sort((a, b) => b.created - a.created);
+      return sorted[0];
     }
 
     // Check for trialing subscriptions
     subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: "trialing",
-      limit: 1,
+      limit: 10,
     });
 
-    if (subscriptions.data[0]) {
-      return subscriptions.data[0];
+    if (subscriptions.data.length > 0) {
+      // Sort by created date (newest first)
+      const sorted = subscriptions.data.sort((a, b) => b.created - a.created);
+      return sorted[0];
     }
 
     // Check for incomplete subscriptions (created but payment not completed)
     subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: "incomplete",
-      limit: 1,
+      limit: 10,
     });
 
-    return subscriptions.data[0] || null;
+    if (subscriptions.data.length > 0) {
+      // Sort by created date (newest first)
+      const sorted = subscriptions.data.sort((a, b) => b.created - a.created);
+      return sorted[0];
+    }
+
+    return null;
   } catch (error) {
     console.error("Error getting subscription:", error);
     throw error;
