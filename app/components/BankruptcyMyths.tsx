@@ -45,7 +45,7 @@ export const BankruptcyMyths = ({ onBack }: { onBack?: () => void }) => {
           {[
             {
               myth: "Bankruptcy destroys your credit for 10 years.",
-              truth: "Actually, most people see their scores jump 50–100 points within months of discharge because their 'Debt-to-Income' ratio is reset to zero. You can often buy a house just 2 years after filing.",
+              truth: "Many clients report meaningful score improvement within months of discharge as their debt-to-income ratio resets. Some have qualified for mortgage financing as soon as 2 years after filing, depending on lender programs and individual financial circumstances. Results vary.",
               icon: Zap
             },
             {
@@ -96,7 +96,7 @@ export const BankruptcyMyths = ({ onBack }: { onBack?: () => void }) => {
                 </p>
                 <p className="text-zinc-400 leading-relaxed mb-6">
                   Unlike debt settlement or informal negotiations, bankruptcy operates under federal court authority, meaning outcomes
-                  are not optional for creditors. When used correctly, it can eliminate or restructure debt, stop compounding penalties,
+                  are not optional for creditors. When used appropriately, it can discharge or restructure qualifying debts, stop compounding penalties,
                   and prevent irreversible financial damage such as wage garnishment, bank levies, or foreclosure.
                 </p>
               </div>
@@ -107,7 +107,7 @@ export const BankruptcyMyths = ({ onBack }: { onBack?: () => void }) => {
                     { icon: Phone, title: "Stops Calls Instantly", desc: "The moment a bankruptcy case is filed, federal law immediately prohibits creditors, collection agencies, and attorneys from contacting you directly." },
                     { icon: Shield, title: "Halts Lawsuits & Garnishments", desc: "Active lawsuits, wage garnishments, bank levies, repossessions, and foreclosure actions must stop immediately upon filing — without negotiation or delay." },
                     { icon: Lock, title: "Freezes Debt Growth", desc: "Interest, penalties, late fees, and collection costs are paused, preventing balances from continuing to spiral out of control." },
-                    { icon: Shield, title: "Creates a Clear Credit Recovery Path", desc: "Many clients see measurable credit improvement within 12–24 months due to reduced utilization, resolved defaults, and the elimination of high-risk debt markers." }
+                    { icon: Shield, title: "Supports a Credit Recovery Path", desc: "Many clients see measurable credit improvement within 12–24 months due to reduced utilization, resolved defaults, and the elimination of high-risk debt markers. Individual results vary." }
                   ].map((item, i) => (
                     <div key={i} className="flex gap-4">
                       <div className="w-12 h-12 bg-zinc-900 flex items-center justify-center flex-shrink-0">
@@ -131,7 +131,7 @@ export const BankruptcyMyths = ({ onBack }: { onBack?: () => void }) => {
               <div>
                  <h3 className="text-3xl font-serif font-bold mb-4">Warning: Settlement Can Lead to Lawsuits</h3>
                  <p className="text-sm leading-relaxed mb-8 font-medium">
-                    Debt settlement programs have no power to stop a lawsuit. Bankruptcy triggers a 'Federal Automatic Stay.' This means all lawsuits, calls, and garnishments stop the second we file.
+                    Debt settlement programs lack the legal authority to stop a lawsuit. A bankruptcy filing triggers a Federal Automatic Stay — a federal court order requiring all lawsuits, collection calls, and garnishments to stop upon proper filing and notice.
                  </p>
                  <button onClick={() => router.push('/case-review')} className="bg-zinc-950 text-white px-10 py-4 text-xs font-black uppercase tracking-widest hover:bg-white hover:text-zinc-950 transition-all">
                     Discuss My Options

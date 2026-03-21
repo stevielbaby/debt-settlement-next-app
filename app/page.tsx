@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   ShieldAlert, 
@@ -13,23 +13,27 @@ import {
   Landmark,
   Phone,
   Lock,
-  Shield,
-  Server
+  Shield
 } from 'lucide-react';
 import { Navbar } from '@/app/components/Navbar';
 import { UrgentBanner } from '@/app/components/UrgentBanner';
-
-export const dynamic = 'force-dynamic';
-import { EvaluationForm } from '@/app/components/EvaluationForm';
+import { EvaluationForm, type EvaluationSubmission } from '@/app/components/EvaluationForm';
 import Link from 'next/link';
 
 export default function HomePage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
 
-  const handleFormSubmit = (data: any) => {
-    setUser(data);
-    router.push(`/dashboard?caseNumber=${data.caseNumber}`);
+  const handleFormSubmit = (data: EvaluationSubmission) => {
+    const params = new URLSearchParams({
+      leadId: data.leadId || '',
+      caseNumber: data.caseNumber || '0001',
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      email: data.email || '',
+      phone: data.phone || '',
+      situation: data.situation || '',
+    });
+    router.push(`/dashboard?${params.toString()}`);
   };
 
   const navigateToSection = (sectionId: string) => {
@@ -47,7 +51,7 @@ export default function HomePage() {
       <div className="animate-fadeIn">
         <header className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 border-b border-zinc-800">
           <div className="absolute inset-0 z-0">
-            <div className="absolute top-20 right-0 w-1/2 h-full bg-gradient-to-l from-zinc-900 to-transparent opacity-50"></div>
+            <div className="absolute top-20 right-0 w-1/2 h-full bg-linear-to-l from-zinc-900 to-transparent opacity-50"></div>
             <div className="absolute inset-0" style={{backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '100px 100px'}}></div>
           </div>
 
@@ -62,12 +66,12 @@ export default function HomePage() {
                 <h1 className="text-5xl sm:text-7xl lg:text-8xl font-serif font-medium leading-[0.9] text-white mb-8 tracking-tighter uppercase">
                   SETTLEMENT <br />
                   <span className="text-outline font-bold">FAILED?</span> <br />
-                  <span className="text-orange-600">GET IT BACK.</span>
+                  <span className="text-orange-600">FIGHT BACK.</span>
                 </h1>
                 
                 <div className="space-y-8 max-w-2xl">
                   <p className="text-lg md:text-xl text-zinc-400 leading-relaxed border-l-2 border-orange-600 pl-6">
-                    Predatory debt settlement companies break federal laws, overpromise results, and take your money. We are a litigating law firm that initiates federal clawbacks, legally validates your debt, and clears your record.
+                    Many debt settlement companies violate federal laws, overpromise results, and collect fees before delivering results. We are a litigating law firm that pursues federal clawbacks, legally challenges your debt, and works to clear your record.
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-12 text-sm">
@@ -81,7 +85,7 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-start gap-3">
                       <Check className="text-orange-600 mt-1 shrink-0" size={16} />
-                      <p className="text-zinc-500"><span className="text-white font-bold">Federal Clawback:</span> We force companies to return administrative and "setup" fees taken in violation of law.</p>
+                      <p className="text-zinc-500"><span className="text-white font-bold">Federal Clawback:</span> We demand the return of administrative and &quot;setup&quot; fees that may have been collected in violation of law.</p>
                     </div>
                     <div className="flex items-start gap-3">
                       <Check className="text-orange-600 mt-1 shrink-0" size={16} />
@@ -143,12 +147,12 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
               <div>
-                <h2 className="text-6xl font-serif leading-none mb-8 uppercase">THEY BROKE <br/> THE LAW.</h2>
+                <h2 className="text-6xl font-serif leading-none mb-8 uppercase">THEY MAY HAVE <br/> BROKEN THE LAW.</h2>
                 <p className="text-xl font-medium leading-relaxed mb-6">
-                  Debt settlement companies are sales floors, not law firms. They often violate strict federal regulations to get your business. <span className="bg-black text-white px-1">We hold them accountable.</span>
+                  Many debt settlement companies operate as sales organizations, not law firms. They often violate strict federal regulations to obtain your business. <span className="bg-black text-white px-1">We hold them accountable.</span>
                 </p>
                 <p className="text-zinc-600 leading-relaxed mb-8">
-                  Many programs charge illegal upfront fees or "setup costs" before saving you a dime. They mislead you about legal protection they cannot provide. If you've been paying into a program with no results, you may be entitled to a full refund.
+                  Many programs charge illegal upfront fees or &quot;setup costs&quot; before saving you a dime. They may mislead you about legal protection they cannot provide. If you&apos;ve been paying into a program with no results, you may be entitled to a refund.
                 </p>
                 <button onClick={() => navigateToSection('evaluation-anchor')} className="inline-flex items-center gap-2 text-orange-600 font-bold uppercase tracking-widest text-sm hover:gap-4 transition-all">
                   Review My Violations <ArrowRight className="w-4 h-4" />
@@ -176,7 +180,7 @@ export default function HomePage() {
             <div className="flex flex-col md:flex-row justify-between items-end mb-16 border-b border-zinc-800 pb-8">
               <h2 className="text-4xl md:text-5xl font-serif text-white uppercase tracking-tighter">THE RECOVERY <br/> STRATEGY</h2>
               <p className="text-zinc-500 text-sm max-w-sm mt-6 md:mt-0 text-right">
-                We are comprehensive. We don't just "fix credit." We use the full weight of the legal system to recover your money and reset your life.
+                We are comprehensive. We don&apos;t just &quot;fix credit.&quot; We use the full weight of the legal system to pursue recovery of your money and help reset your life.
               </p>
             </div>
 
@@ -188,7 +192,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-2xl font-serif text-white mb-4">Recover Your Money</h3>
                 <p className="text-zinc-400 text-sm leading-relaxed mb-6">
-                  First, we audit your contract. If the settlement company violated consumer protection laws, we demand a return of fees paid. We get your money back.
+                  First, we audit your contract. If the settlement company violated consumer protection laws, we demand a return of fees paid and pursue every available avenue of recovery.
                 </p>
               </div>
 
@@ -199,7 +203,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-2xl font-serif text-white mb-4">Legal Debt Validation</h3>
                 <p className="text-zinc-400 text-sm leading-relaxed mb-6">
-                  We launch a legal attack on the debts. We demand proof of ownership. If a creditor cannot validate the debt legally, it must be removed.
+                  We launch a legal challenge against the debts. We demand proof of ownership. If a creditor cannot validate the debt legally, it must be removed.
                 </p>
               </div>
 
@@ -210,7 +214,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-2xl font-serif text-white mb-4">Strategic Bankruptcy</h3>
                 <p className="text-zinc-400 text-sm leading-relaxed mb-6">
-                  If debts are valid, we use the most powerful tool: Bankruptcy. It wipes the slate clean and stops all collections instantly by federal court order.
+                  If debts are valid, we use the most powerful tool: Bankruptcy. It can discharge qualifying debts and stops collections by federal court order through the automatic stay.
                 </p>
               </div>
             </div>
@@ -243,10 +247,10 @@ export default function HomePage() {
                     { icon: Phone, title: "Stops Calls Instantly", desc: "The moment a bankruptcy case is filed, federal law immediately prohibits creditors, collection agencies, and attorneys from contacting you directly." },
                     { icon: Shield, title: "Halts Lawsuits & Garnishments", desc: "Active lawsuits, wage garnishments, bank levies, repossessions, and foreclosure actions must stop immediately upon filing — without negotiation or delay." },
                     { icon: Lock, title: "Freezes Debt Growth", desc: "Interest, penalties, late fees, and collection costs are paused, preventing balances from continuing to spiral out of control." },
-                    { icon: Shield, title: "Creates a Clear Credit Recovery Path", desc: "Many clients see measurable credit improvement within 12–24 months due to reduced utilization, resolved defaults, and the elimination of high-risk debt markers." }
+                    { icon: Shield, title: "Supports a Credit Recovery Path", desc: "Many clients see measurable credit improvement within 12–24 months due to reduced utilization, resolved defaults, and the elimination of high-risk debt markers. Individual results vary." }
                   ].map((item, i) => (
                     <div key={i} className="flex gap-4">
-                      <div className="w-12 h-12 bg-zinc-900 flex items-center justify-center flex-shrink-0">
+                      <div className="w-12 h-12 bg-zinc-900 flex items-center justify-center shrink-0">
                         <item.icon className="w-5 h-5 text-orange-600" />
                       </div>
                       <div>
@@ -263,12 +267,15 @@ export default function HomePage() {
 
         <footer className="bg-orange-600 text-white py-24 text-center">
           <div className="max-w-4xl mx-auto px-4">
-            <h2 className="text-5xl md:text-7xl font-serif font-bold mb-8 tracking-tighter uppercase">STOP THE SCAM. RECOVER YOUR MONEY.</h2>
+            <h2 className="text-5xl md:text-7xl font-serif font-bold mb-8 tracking-tighter uppercase">STOP THE SCAM. FIGHT BACK.</h2>
             <button onClick={() => navigateToSection('evaluation-anchor')} className="bg-white text-orange-600 px-12 py-5 font-black uppercase tracking-widest text-lg hover:bg-zinc-950 hover:text-white transition-all shadow-2xl">
               Start Recovery Review
             </button>
             <div className="mt-16 text-[10px] uppercase tracking-widest opacity-60 flex flex-col items-center gap-4">
-              <span>Stratton Defense Law Firm • 1200 Legal Plaza, Washington DC</span>
+              <span>Stratton Defense Law Firm</span>
+              <span className="normal-case text-[9px] opacity-80 max-w-2xl mx-auto leading-relaxed">
+                Attorney Advertising. This website is for informational purposes only and does not constitute legal advice. No attorney-client relationship is formed by use of this site or submission of any form. Past results do not guarantee or predict a similar outcome in any future matter. Individual results vary based on the specific facts and circumstances of each case.
+              </span>
               <Link href="/auth/signin?callbackUrl=/operator" className="text-white/40 hover:text-white transition-colors text-[9px] font-semibold">
                 Staff Login
               </Link>

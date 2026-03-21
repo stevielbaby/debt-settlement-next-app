@@ -31,7 +31,7 @@ export const ViolationsChecklist = ({ onBack }: { onBack?: () => void }) => {
             <h1 className="text-5xl md:text-7xl font-serif text-white">The Violation Checklist</h1>
           </div>
           <p className="text-zinc-500 text-sm max-w-xs md:text-right">
-            Federal law strictly regulates how debt programs operate. If your program checked any of these boxes, they likely owe you a full refund.
+            Federal law strictly regulates how debt programs operate. If your program exhibited any of these patterns, you may have substantial grounds for a refund claim.
           </p>
         </div>
 
@@ -42,7 +42,7 @@ export const ViolationsChecklist = ({ onBack }: { onBack?: () => void }) => {
               title: "Upfront Fee Collection",
               law: "Telemarketing Sales Rule (TSR)",
               desc: "Did the company take a fee (setup fee, first payment) before actually settling at least one of your debts? This is a 'per se' violation of federal law.",
-              impact: "Entitlement to a 100% refund of all fees paid to the program."
+              impact: "Potential basis for a claim seeking recovery of all fees paid to the program, depending on the specific facts of your contract."
             },
             {
               id: "FDCPA-807",
@@ -89,7 +89,7 @@ export const ViolationsChecklist = ({ onBack }: { onBack?: () => void }) => {
            <div className="relative z-10">
               <h3 className="text-2xl font-serif font-bold mb-4">Evidence Collection is Critical</h3>
               <p className="text-sm leading-relaxed mb-8 max-w-2xl text-zinc-600">
-                The settlement industry relies on your silence. By documenting these violations now, you move from a "victim" to a "plaintiff." During our call, we will perform a deep audit of your specific contract to verify these flags.
+                The settlement industry often relies on clients not knowing their rights. By documenting these potential violations now, you shift from an uninformed consumer to an informed prospective plaintiff. During our call, we will perform a detailed audit of your specific contract to evaluate these issues.
               </p>
               <button onClick={handleBack} className="bg-zinc-950 text-white px-8 py-4 text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-colors inline-flex items-center gap-2">
                 Back to Dashboard <Scale size={14} />

@@ -1,45 +1,124 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, ShieldCheck, Lock, Scale, AlertCircle, CheckCircle2, FileText, Landmark, Gavel, UserPlus, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Lock, Scale, AlertCircle, CheckCircle2, Landmark, Gavel, UserPlus, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export const CaseReviewIntake = ({ onComplete, onBack }: { onComplete: (data: any) => void, onBack?: () => void }) => {
+// Helper function to convert debt amount text to number
+const convertDebtAmountToNumber = (debtAmountText: string): number | undefined => {
+  if (!debtAmountText) return undefined;
+
+  switch (debtAmountText) {
+    case '$5,000 - $15,000':
+      return 10000; // Midpoint of range
+    case '$15,000 - $30,000':
+      return 22500; // Midpoint of range
+    case '$30,000 - $50,000':
+      return 40000; // Midpoint of range
+    case 'Over $50,000':
+      return 60000; // Representative value for over $50k
+    default:
+      // Try to parse if it's already a number string
+      const parsed = parseInt(debtAmountText.replace(/[$,]/g, ''));
+      return isNaN(parsed) ? undefined : parsed;
+  }
+};
+
+export type CaseReviewSubmission = {
+  caseNumber: string;
+  leadId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  situation: string;
+  debtAmount: string;
+  currentCompany: string;
+};
+
+export const CaseReviewIntake = ({ onComplete, onBack }: { onComplete: (data: CaseReviewSubmission) => void, onBack?: () => void }) => {
   const router = useRouter();
-  const [formData, setFormData] = useState({ 
-    firstName: '', 
-    lastName: '', 
-    situation: 'Program failed / I am unhappy',
-    debtAmount: 'Over $15,000',
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    situation: 'Settlement Program Failure',
+    debtAmount: '$5,000 - $15,000',
     currentCompany: '',
     email: '',
     phone: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
+
     try {
-      // Call the Next.js API route
-      const response = await fetch('/api/leads', {
+      // Call the new intake submit API
+      const response = await fetch('/api/intake/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          leadType: 'DEBT_SETTLEMENT', // Default for this form
+          contact: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone,
+          },
+          intakePayload: {
+            situation: formData.situation,
+            debtAmount: formData.debtAmount,
+            currentCompany: formData.currentCompany,
+            // Add any other form data as needed
+          },
+          debtAmount: convertDebtAmountToNumber(formData.debtAmount),
+        })
       });
 
       const result = await response.json();
 
       if (response.ok && result.success) {
         console.log('Lead submitted successfully');
-        onComplete({ ...formData, caseNumber: result.caseNumber });
+        setSubmitSuccess(true);
+
+        // Generate sequential case number (temporary until DB persistence is fixed)
+        const lastCaseNumber = parseInt(localStorage.getItem('lastCaseNumber') || '0');
+        const nextCaseNumber = (lastCaseNumber + 1).toString().padStart(4, '0');
+        localStorage.setItem('lastCaseNumber', nextCaseNumber);
+
+        onComplete({
+          ...formData,
+          caseNumber: nextCaseNumber,
+          leadId: result.leadId,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone
+        });
       } else {
-        throw new Error(result.error || 'Submission failed');
+        // Handle specific error types
+        const errorMessage = result.error?.message || 'Submission failed';
+        if (result.error?.code === 'VALIDATION_ERROR') {
+          setSubmitError('Please check your information and try again. All fields are required.');
+        } else if (result.error?.code === 'DUPLICATE_INTAKE') {
+          setSubmitError('We already have your information on file. Our team will contact you soon.');
+        } else {
+          setSubmitError(errorMessage);
+        }
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error submitting lead:', error);
-      alert('There was an error submitting your information. Please try again.');
+      // Error is already set above, don't show alert
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -55,8 +134,8 @@ export const CaseReviewIntake = ({ onComplete, onBack }: { onComplete: (data: an
     <div className="min-h-screen bg-zinc-950 pt-24 pb-20 animate-fadeIn">
       {/* Background elements */}
       <div className="fixed inset-0 pointer-events-none opacity-20 overflow-hidden">
-        <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-orange-600/20 blur-[120px] rounded-full"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-zinc-800/20 blur-[120px] rounded-full"></div>
+        <div className="absolute top-[-10%] right-[-10%] w-125 h-125 bg-orange-600/20 blur-[120px] rounded-full"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-125 h-125 bg-zinc-800/20 blur-[120px] rounded-full"></div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 relative z-10">
@@ -105,7 +184,7 @@ export const CaseReviewIntake = ({ onComplete, onBack }: { onComplete: (data: an
                 <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-zinc-500">Attorney-Client Privilege</span>
               </div>
               <p className="text-[11px] text-zinc-600 italic leading-relaxed">
-                Information submitted through this portal is protected by attorney-client privilege. Your data is encrypted and will not be shared with third parties or your creditors.
+                Information submitted by prospective clients is treated as confidential pursuant to our professional obligations under California Rules of Professional Conduct, Rule 1.18. Your data is encrypted and will not be shared with third parties or your creditors. No attorney-client relationship is formed until a retainer agreement is signed.
               </p>
             </div>
           </div>
@@ -205,9 +284,34 @@ export const CaseReviewIntake = ({ onComplete, onBack }: { onComplete: (data: an
                 </div>
 
                 <div className="pt-6">
-                  <button type="submit" className="w-full bg-white text-black font-black uppercase tracking-widest py-5 hover:bg-orange-600 hover:text-white transition-all duration-300 flex items-center justify-center gap-4 group">
-                    INITIATE LEGAL AUDIT <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-white text-black font-black uppercase tracking-widest py-5 hover:bg-orange-600 hover:text-white transition-all duration-300 flex items-center justify-center gap-4 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        ANALYZING CASE...
+                      </>
+                    ) : submitSuccess ? (
+                      <>
+                        <CheckCircle2 className="w-5 h-5" />
+                        CASE SUBMITTED
+                      </>
+                    ) : (
+                      <>
+                        INITIATE LEGAL AUDIT <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </button>
+
+                  {submitError && (
+                    <div className="flex items-center gap-2 text-red-400 text-sm mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{submitError}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-center gap-8 pt-8 border-t border-zinc-800/50">

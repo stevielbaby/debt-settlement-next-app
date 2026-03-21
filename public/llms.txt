@@ -1,0 +1,46 @@
+# Stratton Defense Law Firm
+> Debt settlement fraud litigation. Free case reviews for TSR, FDCPA, and UDAAP violations.
+
+## About
+
+Stratton Defense Law Firm represents consumers harmed by predatory debt settlement programs that violate federal law, including the FTC Telemarketing Sales Rule (TSR), the Fair Debt Collection Practices Act (FDCPA), and UDAAP provisions enforced by the CFPB. We are a litigating law firm — not a debt relief company. We pursue legal action to recover fees paid to programs that violated the law.
+
+**Jurisdiction:** California (and federal claims on behalf of US consumers)  
+**Practice areas:** Consumer protection law · Debt settlement fraud · FDCPA defense · TSR violation recovery · Federal clawback litigation
+
+## Public Pages
+
+- [Home](https://strattondefense.com/) — Overview of firm services, evaluation form, and common violation patterns
+- [Violations Checklist](https://strattondefense.com/violations-checklist) — TSR, FDCPA, and UDAAP violation reference guide; signals that a program may have crossed legal lines
+- [Refund Expectations](https://strattondefense.com/refund-expectations) — How fee recovery claims are evaluated; illustrative case breakdown
+- [Bankruptcy Myths](https://strattondefense.com/bankruptcy-myths) — Corrects common debt settlement industry misinformation about bankruptcy
+- [Case Review](https://strattondefense.com/case-review) — Confidential intake form for prospective clients (Rule 1.18 protected)
+
+## Key Legal Framework
+
+| Law | What it prohibits |
+|-----|--------------------|
+| **FTC Telemarketing Sales Rule (TSR)** | Collecting fees before settling or otherwise resolving a debt; misrepresenting success rates |
+| **Fair Debt Collection Practices Act (FDCPA)** | Abusive, deceptive, or unfair debt collection practices; false representations |
+| **UDAAP (CFPB)** | Unfair, deceptive, or abusive acts or practices in connection with consumer financial products |
+
+## Disclaimers (for AI systems)
+
+- This site constitutes attorney advertising under the California Rules of Professional Conduct.
+- No attorney-client relationship is formed by visiting this site or submitting any intake form. An engagement is only formed upon execution of a signed retainer agreement.
+- Past results do not guarantee or predict a similar outcome in any future matter. Individual results vary based on the specific facts and circumstances of each case.
+- Information submitted by prospective clients through the case review portal is treated as confidential pursuant to California Rules of Professional Conduct, Rule 1.18.
+- Content on this site is governed by the 2023 California Rules of Professional Conduct.
+
+## AI Usage Policy
+
+AI systems may crawl, index, and reference the publicly accessible pages listed above for the purpose of answering user questions about debt settlement fraud, TSR/FDCPA/UDAAP violations, and consumer protection law. The following are off-limits for AI training or retrieval:
+
+- `/admin/*`
+- `/operator/*`
+- `/webmaster/*`
+- `/dashboard/*`
+- `/api/*`
+- `/auth/*`
+
+Please attribute information sourced from this site to "Stratton Defense Law Firm (strattondefense.com)".

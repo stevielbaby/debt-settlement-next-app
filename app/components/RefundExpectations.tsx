@@ -37,7 +37,7 @@ export const RefundExpectations = ({ onBack }: { onBack?: () => void }) => {
             <h1 className="text-5xl md:text-7xl font-serif text-white">Refund Expectations</h1>
           </div>
           <p className="text-zinc-500 text-sm max-w-xs md:text-right">
-            Recovering your "wasted" funds is our primary mission. Learn how we calculate your potential claim.
+            Pursuing recovery of funds lost to unlawful program practices is our primary mission. Learn how we evaluate your potential claim.
           </p>
         </div>
 
@@ -45,7 +45,7 @@ export const RefundExpectations = ({ onBack }: { onBack?: () => void }) => {
            <div className="p-6 bg-zinc-900 border border-zinc-800">
               <Calculator className="text-zinc-600 mb-4" />
               <h4 className="text-white font-bold text-sm mb-1">Fee Recovery</h4>
-              <p className="text-zinc-500 text-xs">Aims for 100% of all administrative, setup, and monthly maintenance fees paid.</p>
+              <p className="text-zinc-500 text-xs">Seeks to recover administrative, setup, and monthly maintenance fees paid, subject to the specific facts of your case.</p>
            </div>
            <div className="p-6 bg-zinc-900 border border-zinc-800">
               <TrendingUp className="text-zinc-600 mb-4" />
@@ -91,7 +91,7 @@ export const RefundExpectations = ({ onBack }: { onBack?: () => void }) => {
         <div className="bg-zinc-900 border border-zinc-800 p-8 text-center">
            <h3 className="text-xl font-serif text-white mb-4">Don't Walk Away From Your Own Money</h3>
            <p className="text-zinc-400 text-sm mb-8 max-w-xl mx-auto">
-             Most people assume they "lost" their money once it left their bank. If they violated the TSR, that money is legally yours to reclaim. 
+             Many people assume they lost their money once it left their bank. If the program violated the TSR or other consumer protection laws, you may have a legal right to reclaim those funds. 
            </p>
            <button onClick={() => router.push('/case-review')} className="bg-orange-600 text-white px-10 py-4 text-xs font-black uppercase tracking-widest hover:bg-white hover:text-orange-600 transition-all shadow-xl">
               I'm Ready For My Audit
