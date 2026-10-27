@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { sql } from '@/app/lib/db';
-import bcrypt from 'bcryptjs';
+import { hashPassword, setUserPassword } from '@/app/lib/password-utils';
 
 async function createOperator() {
   try {
@@ -32,8 +32,7 @@ async function createOperator() {
     const password = 'operator123';
     const name = 'Test Operator';
 
-    // Hash password securely
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
 
     // Ensure we have an org id to use
     const orgRow = orgId
@@ -46,23 +45,27 @@ async function createOperator() {
     }
 
     const user = await sql`
-      INSERT INTO app.users (email, password_hash, name, role, org_id, status)
+      INSERT INTO app.users (email, password_hash, name, role, org_id, status, created_at, updated_at)
       VALUES (
         ${email},
         ${passwordHash},
         ${name},
         'operator',
         ${orgIdToUse},
-        'active'
+        'active',
+        NOW(),
+        NOW()
       )
       ON CONFLICT (email) DO NOTHING
       RETURNING id, email, role
     `;
 
+    await setUserPassword(email, password);
+
     if (user.length > 0) {
       console.log('Created operator user:', user[0].email, user[0].role);
     } else {
-      console.log('Operator user already exists');
+      console.log('Operator user already exists; password reset');
     }
 
     console.log('\n✅ Setup complete!');

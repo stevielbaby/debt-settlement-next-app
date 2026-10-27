@@ -18,6 +18,30 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-12-15.clover",
 });
 
+type SubscriptionPeriodSource = {
+  current_period_start?: number | null;
+  current_period_end?: number | null;
+  items?: {
+    data?: Array<{
+      current_period_start?: number | null;
+      current_period_end?: number | null;
+    }>;
+  };
+};
+
+/** Stripe keeps the billing window on the subscription item, not the subscription itself. */
+export function subscriptionPeriod(subscription: SubscriptionPeriodSource): { start: Date; end: Date } {
+  const item = subscription.items?.data?.[0];
+  const startSeconds = item?.current_period_start ?? subscription.current_period_start;
+  const endSeconds = item?.current_period_end ?? subscription.current_period_end;
+  const start = startSeconds ? new Date(startSeconds * 1000) : new Date();
+  const end = endSeconds ? new Date(endSeconds * 1000) : new Date(start.getTime());
+  if (!endSeconds) {
+    end.setMonth(end.getMonth() + 1);
+  }
+  return { start, end };
+}
+
 /**
  * Create a Stripe customer for an organization
  */

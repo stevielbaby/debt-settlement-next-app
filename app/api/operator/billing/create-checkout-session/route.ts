@@ -14,15 +14,15 @@ import { sql } from "@/app/lib/db";
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || session.user.role !== "operator") {
+    const role = session?.user?.role;
+    if (!session?.user || (role !== "operator" && role !== "webmaster")) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const organizationId = (session.user as unknown as Record<string, unknown>)
-      .organization_id as string | undefined;
+    const organizationId = session.user.orgId;
     if (!organizationId) {
       return NextResponse.json(
         { success: false, error: "No organization assigned" },
@@ -59,9 +59,9 @@ export async function POST(request: Request) {
 
     // Get plan details
     const planResult = await sql`
-      SELECT id, name, description, price, monthly_limit, stripe_product_id, stripe_price_id, yearly_stripe_price_id
+      SELECT id, name, description, price, monthly_limit, stripe_product_id, stripe_price_id, stripe_yearly_price_id
       FROM app.subscription_plans
-      WHERE id = ${planId} AND is_active = true
+      WHERE id = ${planId} AND COALESCE(is_deprecated, false) = false
       LIMIT 1
     `;
 
@@ -78,9 +78,18 @@ export async function POST(request: Request) {
     const ensuredCustomerId: string = await ensureStripeCustomerForOrganization(organizationId);
 
     // Ensure plan has Stripe product/price; auto-provision if needed
-    let stripePriceId = billingPeriod === "month" 
-      ? (plan.stripe_price_id as string)
-      : (plan.yearly_stripe_price_id as string);
+    let stripePriceId = billingPeriod === "month"
+      ? (plan.stripe_price_id as string | null)
+      : (plan.stripe_yearly_price_id as string | null);
+
+    if (stripePriceId) {
+      try {
+        const existingPrice = await stripe.prices.retrieve(stripePriceId);
+        if (!existingPrice.active) stripePriceId = null;
+      } catch {
+        stripePriceId = null;
+      }
+    }
 
     if (!stripePriceId) {
       // Need to create the price

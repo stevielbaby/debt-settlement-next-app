@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
+  // A package-lock.json in the home directory makes Turbopack treat that
+  // folder as the app root, so project dependencies fail to resolve.
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
+
   // Enable standalone output for Docker
   output: 'standalone',
   

@@ -31,8 +31,8 @@ export async function POST(request: Request) {
 
     // Verify lead exists and belongs to operator's org (or if webmaster)
     const leadCheck = await sql`
-      SELECT id, org_id, converted, first_name, last_name, email, phone, situation, debt_amount, current_company, case_number
-      FROM public.leads
+      SELECT id, converted, first_name, last_name, email, phone, situation, debt_amount, current_company, case_number
+      FROM app.leads
       WHERE id = ${leadId}
       LIMIT 1
     `;
@@ -43,9 +43,9 @@ export async function POST(request: Request) {
 
     const lead = leadCheck[0];
 
-    // Check org access
-    if (role === 'operator' && lead.org_id !== orgId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const caseOrgId = orgId;
+    if (role === 'operator' && !caseOrgId) {
+      return NextResponse.json({ error: 'Missing organization context' }, { status: 400 });
     }
 
     // Check if already converted
@@ -55,13 +55,14 @@ export async function POST(request: Request) {
 
     // Generate case number (CASE-XXXXX format)
     const caseNumber = `CASE-${String(lead.case_number).padStart(5, '0')}`;
+    const caseId = `case_${crypto.randomUUID()}`;
 
     // Create case in app.cases
     const newCase = await sql`
       INSERT INTO app.cases (
+        id,
         case_number,
         org_id,
-        lead_id,
         first_name,
         last_name,
         email,
@@ -75,9 +76,9 @@ export async function POST(request: Request) {
         updated_at
       )
       VALUES (
+        ${caseId},
         ${caseNumber},
-        ${lead.org_id},
-        ${leadId},
+        ${caseOrgId},
         ${lead.first_name},
         ${lead.last_name},
         ${lead.email},
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
 
     // Mark lead as converted
     await sql`
-      UPDATE public.leads
+      UPDATE app.leads
       SET converted = TRUE, updated_at = NOW()
       WHERE id = ${leadId}
     `;

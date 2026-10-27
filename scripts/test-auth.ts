@@ -1,4 +1,5 @@
 import { sql } from '@/app/lib/db';
+import { hashPassword } from '@/app/lib/password-utils';
 
 async function testConnection() {
   try {
@@ -36,16 +37,18 @@ async function testConnection() {
         orgId = existing[0]?.id;
       }
 
-      // Create user with bcrypt hash of 'operator123'
+      const passwordHash = await hashPassword('operator123');
       const user = await sql`
-        INSERT INTO app.users (email, password_hash, name, role, org_id, status)
+        INSERT INTO app.users (email, password_hash, name, role, org_id, status, created_at, updated_at)
         VALUES (
           'operator@strattondefense.com',
-          '$2a$10$M2kXGpDQqL5q.4YpZnY7e.6QZv5qZpOJQZvN9qZwvN8qZvN9qZvN',
+          ${passwordHash},
           'Test Operator',
           'operator',
           ${orgId},
-          'active'
+          'active',
+          NOW(),
+          NOW()
         )
         RETURNING id, email, name, role, org_id
       `;

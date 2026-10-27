@@ -5,21 +5,22 @@
 
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { stripe, subscriptionPeriod } from "@/lib/stripe";
 import { saveStripeSubscription, logBillingEvent } from "@/lib/stripe-db";
 import { sql } from "@/app/lib/db";
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || session.user.role !== "operator") {
+    const role = session?.user?.role;
+    if (!session?.user || (role !== "operator" && role !== "webmaster")) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const organizationId = (session.user as any).organization_id;
+    const organizationId = session.user.orgId;
     if (!organizationId) {
       return NextResponse.json(
         { success: false, error: "No organization assigned" },
@@ -87,18 +88,16 @@ export async function POST(request: Request) {
     const plan = planResult[0];
 
     // Extract subscription details
-    const sub = subscription as any;
-    const currentPeriodStart = new Date((sub.current_period_start || Date.now() / 1000) * 1000);
-    const currentPeriodEnd = new Date((sub.current_period_end || Date.now() / 1000) * 1000);
-    const stripePriceId = sub.items.data[0].price.id;
+    const { start: currentPeriodStart, end: currentPeriodEnd } = subscriptionPeriod(subscription);
+    const stripePriceId = subscription.items.data[0].price.id;
 
     // Save subscription to database
     await saveStripeSubscription(
       organizationId,
-      sub.id,
+      subscription.id,
       stripePriceId,
       planId,
-      sub.status,
+      subscription.status,
       currentPeriodStart,
       currentPeriodEnd,
       billingPeriod
@@ -108,20 +107,20 @@ export async function POST(request: Request) {
     await logBillingEvent(
       organizationId,
       "subscription_created",
-      sub.id,
+      subscription.id,
       {
         planId,
         planName: plan.name,
         billingPeriod,
-        status: sub.status,
+        status: subscription.status,
       }
     );
 
     return NextResponse.json({
       success: true,
       subscription: {
-        id: sub.id,
-        status: sub.status,
+        id: subscription.id,
+        status: subscription.status,
         planName: plan.name,
         amount: parseFloat(plan.price),
         billingPeriod,

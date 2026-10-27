@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getWebhookEvent, stripe } from "@/lib/stripe";
+import { getWebhookEvent, stripe, subscriptionPeriod } from "@/lib/stripe";
 import {
   updateInvoiceStatus,
   saveStripeSubscription,
@@ -172,8 +172,7 @@ export async function POST(request: Request) {
             break;  // Exit early - don't try to save to Stripe
           }
 
-          const periodStart = new Date(subscription.current_period_start * 1000);
-          const periodEnd = new Date(subscription.current_period_end * 1000);
+          const { start: periodStart, end: periodEnd } = subscriptionPeriod(subscription);
 
           // Get plan ID from our database using price ID
           const item = subscription.items.data[0];

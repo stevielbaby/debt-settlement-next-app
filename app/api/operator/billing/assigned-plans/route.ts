@@ -10,47 +10,40 @@ import { sql } from "@/app/lib/db";
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user || session.user.role !== "operator") {
+    const role = session?.user?.role;
+    if (!session?.user || (role !== "operator" && role !== "webmaster")) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const organizationId = (session.user as any).organization_id;
-    if (!organizationId) {
+    if (!session.user.orgId) {
       return NextResponse.json(
         { success: false, error: "No organization assigned" },
         { status: 400 }
       );
     }
 
-    // Get the organization's assigned plans
-    // In this system, all active plans are available to all operators
-    // But you can modify this to query a organization_plans junction table if you want
-    // to restrict certain plans to certain organizations
-    
     const result = await sql`
-      SELECT 
-        id, name, description, price, monthly_limit, features, is_active,
-        stripe_product_id, stripe_price_id, yearly_stripe_price_id
+      SELECT
+        id, name, description, price, features,
+        stripe_product_id, stripe_price_id, stripe_yearly_price_id
       FROM app.subscription_plans
-      WHERE is_active = true
-      ORDER BY monthly_limit ASC
+      WHERE COALESCE(is_deprecated, false) = false
+        AND COALESCE(is_visible_to_operators, true) = true
+      ORDER BY price ASC
     `;
 
     const plans = result.map((row: any) => ({
       id: row.id,
       name: row.name,
-      description: row.description,
+      description: row.description || "Monthly hosting and maintenance for your site.",
       monthlyPrice: parseFloat(row.price),
-      yearlyPrice: Math.round(parseFloat(row.price) * 10), // 10 months for yearly (2 months free)
-      monthlyLimit: parseInt(row.monthly_limit),
-      features: row.features || [],
-      isActive: row.is_active,
+      features: Array.isArray(row.features) ? row.features : [],
       stripeProductId: row.stripe_product_id,
       monthlyStripePriceId: row.stripe_price_id,
-      yearlyStripePriceId: row.yearly_stripe_price_id,
+      yearlyStripePriceId: row.stripe_yearly_price_id,
     }));
 
     return NextResponse.json({

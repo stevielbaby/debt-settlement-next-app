@@ -26,8 +26,6 @@ async function testAuth() {
     console.log('✅ User found:');
     console.log(`   Email: ${user.email}`);
     console.log(`   Role: ${user.role}`);
-    console.log(`   Password Hash: ${user.password_hash}`);
-    
     // Test password match
     const testPassword = 'operator123';
     const isValid = await bcrypt.compare(testPassword, user.password_hash);

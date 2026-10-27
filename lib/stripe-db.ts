@@ -129,16 +129,14 @@ export async function saveStripeSubscription(
     // First, get the existing subscription ID to see if we're updating
     const existing = await sql`
       SELECT id FROM app.organization_subscriptions
-      WHERE org_id = ${organizationId} OR organization_id = ${organizationId}
+      WHERE organization_id = ${organizationId}
       LIMIT 1
     `;
 
     if (existing.length > 0) {
-      // Update existing subscription - populate both org_id and organization_id for dual-column pattern
       const result = await sql`
         UPDATE app.organization_subscriptions
-        SET org_id = ${organizationId},
-            organization_id = ${organizationId},
+        SET organization_id = ${organizationId},
             plan_id = ${planId},
             status = ${dbStatus},
             billing_period = ${billingPeriod},
@@ -153,16 +151,14 @@ export async function saveStripeSubscription(
 
       return result[0];
     } else {
-      // Create new subscription - populate both org_id (legacy, NOT NULL) and organization_id (new) for dual-column pattern
+      const subscriptionRowId = `sub_${crypto.randomUUID()}`;
       const result = await sql`
         INSERT INTO app.organization_subscriptions (
-          org_id,
+          id,
           organization_id,
           plan_id,
           status,
           billing_period,
-          billing_cycle_start,
-          billing_cycle_end,
           current_period_start,
           current_period_end,
           stripe_subscription_id,
@@ -171,13 +167,11 @@ export async function saveStripeSubscription(
           updated_at
         )
         VALUES (
-          ${organizationId},
+          ${subscriptionRowId},
           ${organizationId},
           ${planId},
           ${dbStatus},
           ${billingPeriod},
-          ${start.toISOString()},
-          ${end.toISOString()},
           ${start.toISOString()},
           ${end.toISOString()},
           ${stripeSubscriptionId},
@@ -204,7 +198,7 @@ export async function getStripeSubscription(organizationId: string) {
     const result = await sql`
       SELECT stripe_subscription_id, stripe_price_id, status, current_period_end
       FROM app.organization_subscriptions
-      WHERE org_id = ${organizationId} OR organization_id = ${organizationId}
+      WHERE organization_id = ${organizationId}
       LIMIT 1
     `;
 
@@ -230,10 +224,10 @@ export async function savePlanStripeIds(
         UPDATE app.subscription_plans
         SET stripe_product_id = ${stripeProductId},
             stripe_price_id = ${stripePriceId},
-            yearly_stripe_price_id = ${yearlyStripePriceId},
+            stripe_yearly_price_id = ${yearlyStripePriceId},
             updated_at = NOW()
         WHERE id = ${planId}
-        RETURNING id, stripe_product_id, stripe_price_id, yearly_stripe_price_id
+        RETURNING id, stripe_product_id, stripe_price_id, stripe_yearly_price_id
       `;
 
       return result[0];
@@ -244,7 +238,7 @@ export async function savePlanStripeIds(
             stripe_price_id = ${stripePriceId},
             updated_at = NOW()
         WHERE id = ${planId}
-        RETURNING id, stripe_product_id, stripe_price_id, yearly_stripe_price_id
+        RETURNING id, stripe_product_id, stripe_price_id, stripe_yearly_price_id
       `;
 
       return result[0];

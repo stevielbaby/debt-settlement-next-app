@@ -12,6 +12,7 @@ import {
   createSubscription,
   createStripeProduct,
   createStripePrice,
+  subscriptionPeriod,
 } from "@/lib/stripe";
 import { saveStripeSubscription, getPlanStripePriceId, savePlanStripeIds } from "@/lib/stripe-db";
 import { ensureStripeCustomerForOrganization } from "@/lib/billing";
@@ -116,35 +117,14 @@ export async function POST(request: Request) {
     console.log("Stripe subscription result:", { id: subResult.id, status: subResult.status, current_period_start: (subResult as any).current_period_start, current_period_end: (subResult as any).current_period_end });
 
     // Extract subscription details with explicit typing
-    const { current_period_start, current_period_end, id, status } = subResult as unknown as {
-      current_period_start: number | null | undefined;
-      current_period_end: number | null | undefined;
-      id: string;
-      status: string;
-    };
-
-    // Save subscription to database - convert Unix timestamps (seconds) to milliseconds
-    let periodStart: Date;
-    let periodEnd: Date;
-    
-    if (current_period_start && current_period_end) {
-      periodStart = new Date(current_period_start * 1000);
-      periodEnd = new Date(current_period_end * 1000);
-    } else {
-      // Fallback: use current time and add 1 month
-      periodStart = new Date();
-      periodEnd = new Date();
-      periodEnd.setMonth(periodEnd.getMonth() + 1);
-    }
+    const { id, status } = subResult;
+    const { start: periodStart, end: periodEnd } = subscriptionPeriod(subResult);
 
     // Validate dates are valid
     if (isNaN(periodStart.getTime()) || isNaN(periodEnd.getTime())) {
-      console.error("Invalid subscription period dates:", { current_period_start, current_period_end });
+      console.error("Invalid subscription period dates:", { periodStart, periodEnd });
       return NextResponse.json(
-        {
-          success: false,
-          error: `Invalid subscription period dates from Stripe: start=${current_period_start}, end=${current_period_end}`,
-        },
+        { success: false, error: "Invalid subscription period dates from Stripe" },
         { status: 400 }
       );
     }

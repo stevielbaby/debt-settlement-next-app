@@ -4,8 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
 import { sql } from '@/app/lib/db';
+import { hashPassword } from '@/app/lib/password-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,17 +63,13 @@ export async function POST(request: NextRequest) {
 
     organizationId = orgResult[0].id;
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Extract name from email (everything before @)
+    const passwordHash = await hashPassword(password);
     const nameFromEmail = email.split('@')[0];
 
-    // Create user
     const createUserResult = await sql`
       INSERT INTO app.users 
-      (email, password_hash, name, role, org_id, status, created_at)
-      VALUES (${email}, ${hashedPassword}, ${nameFromEmail}, ${role || 'operator'}, ${organizationId}, 'active', NOW())
+      (email, password_hash, name, role, org_id, status, created_at, updated_at)
+      VALUES (${email}, ${passwordHash}, ${nameFromEmail}, ${role || 'operator'}, ${organizationId}, 'active', NOW(), NOW())
       RETURNING id, email, role, org_id
     `;
 

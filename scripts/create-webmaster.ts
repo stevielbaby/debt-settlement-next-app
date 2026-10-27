@@ -6,8 +6,8 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
-import bcrypt from "bcryptjs";
 import { sql } from "@/app/lib/db";
+import { hashPassword, setUserPassword } from "@/app/lib/password-utils";
 
 async function createWebmasterUser() {
   try {
@@ -18,22 +18,18 @@ async function createWebmasterUser() {
     const name = "Webmaster Admin";
 
     // Hash password
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
+    const passwordHash = await hashPassword(password);
 
-    // Check if user already exists
     const existing = await sql`
-      SELECT id FROM app.users WHERE email = ${email} LIMIT 1
+      SELECT id FROM app.users WHERE lower(email) = lower(${email}) LIMIT 1
     `;
 
     if (existing.length > 0) {
-      console.log(`✓ Webmaster user already exists with ID: ${existing[0].id}`);
-      console.log(`  Email: ${email}`);
-      console.log(`  Password: ${password}`);
+      await setUserPassword(email, password);
+      console.log(`✓ Webmaster password reset for ${email}`);
       return;
     }
 
-    // Create webmaster user (no organization)
     const result = await sql`
       INSERT INTO app.users (email, password_hash, name, role, status, created_at, updated_at)
       VALUES (

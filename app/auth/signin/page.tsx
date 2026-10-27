@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Scale, Lock, AlertCircle } from 'lucide-react';
@@ -9,25 +9,14 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 
 function SignInContent() {
-  const isDev = process.env.NODE_ENV !== 'production';
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
-  const formRef = useRef<HTMLFormElement>(null);
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [autoSubmitting, setAutoSubmitting] = useState(false);
-
-  React.useEffect(() => {
-    // Auto-submit when button sets both fields
-    if (autoSubmitting && email && password && formRef.current) {
-      setAutoSubmitting(false);
-      formRef.current.requestSubmit();
-    }
-  }, [autoSubmitting, email, password]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,9 +36,10 @@ function SignInContent() {
         redirect: false,
       });
 
-      console.log('SignIn result:', result);
-
-      if (result?.error) {
+      if (result?.code === 'auth_unavailable') {
+        setError('Sign-in is unavailable. Try again in a moment.');
+        setLoading(false);
+      } else if (result?.error) {
         setError('Invalid email or password');
         setLoading(false);
       } else if (result?.ok) {
@@ -110,7 +100,7 @@ function SignInContent() {
         </div>
 
         {/* Sign In Form */}
-        <form ref={formRef} onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 p-8 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 p-8 space-y-6">
           {error && (
             <div className="bg-red-900/20 border border-red-800 p-4 flex items-start gap-3">
               <AlertCircle className="text-red-500 shrink-0" size={20} />
@@ -156,34 +146,6 @@ function SignInContent() {
             {loading ? 'Authenticating...' : 'Access System'}
           </button>
 
-          {isDev && (
-            <div className="space-y-3 mt-6 pt-6 border-t border-zinc-800">
-              <p className="text-zinc-500 text-xs uppercase tracking-widest">Quick Start (Dev)</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setAutoSubmitting(true);
-                  setEmail('admin@woodslegal.com');
-                  setPassword('webmaster123');
-                }}
-                className="w-full bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white px-4 py-2 font-bold uppercase tracking-wider text-xs transition-all border border-orange-500"
-              >
-                🔧 Webmaster Dashboard
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAutoSubmitting(true);
-                  setEmail('operator@woodslegal.com');
-                  setPassword('operator123');
-                }}
-                className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 font-bold uppercase tracking-wider text-xs transition-all border border-zinc-700 hover:border-orange-600"
-              >
-                📋 Try Operator Account
-              </button>
-              <p className="text-[10px] text-zinc-600 text-center mt-2">Auto-fills and submits</p>
-            </div>
-          )}
         </form>
 
         {/* Sign Up Link */}

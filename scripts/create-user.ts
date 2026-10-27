@@ -10,7 +10,7 @@ async function createUser(
   fullName?: string,
   createdBy?: number
 ) {
-  const passwordHash = hashPassword(password);
+  const passwordHash = await hashPassword(password);
   
   const result = await sql`
     INSERT INTO users (username, email, password_hash, role, full_name, created_by)

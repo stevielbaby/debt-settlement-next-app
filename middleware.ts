@@ -9,21 +9,36 @@ const publicRoutes = [
   "/case-review",
   "/dashboard", // Temporarily public for existing flow
   "/auth/signin",
+  "/auth/join",
   "/auth/error",
+  "/api/auth",
   "/api/leads",
   "/api/bookings",
 ];
+
+function isPublicRoute(pathname: string) {
+  return publicRoutes.some((route) => {
+    if (route === "/") return pathname === "/";
+    return pathname === route || pathname.startsWith(`${route}/`);
+  });
+}
 
 export default auth((request) => {
   const { pathname } = request.nextUrl;
   const session = request.auth;
 
-  const isPublicRoute = publicRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  // Next.js assets, image optimizer, and public files must not require a session.
+  if (
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml"
+  ) {
+    return NextResponse.next();
+  }
 
   // Allow access to public routes
-  if (isPublicRoute) {
+  if (isPublicRoute(pathname)) {
     return NextResponse.next();
   }
 
@@ -60,3 +75,9 @@ export default auth((request) => {
 
   return NextResponse.next();
 });
+
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)",
+  ],
+};

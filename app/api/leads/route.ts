@@ -21,19 +21,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert the lead into the database
+    const nextNumber = await sql`
+      SELECT COALESCE(MAX(case_number), 1000) + 1 AS n FROM app.leads
+    `;
+    const caseNumber = nextNumber[0].n;
+
     const result = await sql`
-      INSERT INTO leads (first_name, last_name, situation, debt_amount, current_company, email, phone)
-      VALUES (${firstName}, ${lastName}, ${situation}, ${debtAmount}, ${currentCompany}, ${email}, ${phone})
+      INSERT INTO app.leads (
+        case_number, first_name, last_name, situation, debt_amount, current_company, email, phone, updated_at
+      )
+      VALUES (
+        ${caseNumber}, ${firstName}, ${lastName}, ${situation}, ${debtAmount}, ${currentCompany}, ${email}, ${phone}, NOW()
+      )
       RETURNING case_number
     `;
-
-    const caseNumber = result[0].case_number;
 
     return NextResponse.json({
       message: 'Lead submitted successfully',
       success: true,
-      caseNumber: caseNumber
+      caseNumber: result[0].case_number
     });
 
   } catch (error: any) {
@@ -72,7 +78,7 @@ export async function GET() {
           appointment_slot_start,
           appointment_slot_end,
           created_at
-        FROM leads
+        FROM app.leads
         ORDER BY created_at DESC
       `;
     } catch (error: any) {
@@ -91,7 +97,7 @@ export async function GET() {
               email, 
               phone, 
               created_at
-            FROM leads
+            FROM app.leads
             ORDER BY created_at DESC
           `;
         } catch (innerError: any) {
@@ -108,7 +114,7 @@ export async function GET() {
                 email, 
                 phone, 
                 created_at
-              FROM leads
+              FROM app.leads
               ORDER BY created_at DESC
             `;
           } else {

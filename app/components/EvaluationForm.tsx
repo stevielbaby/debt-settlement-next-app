@@ -4,7 +4,17 @@ import React, { useState } from 'react';
 import { Scale, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export const EvaluationForm = ({ onComplete }: { onComplete: (data: any) => void }) => {
+export type EvaluationSubmission = {
+  leadId?: string;
+  caseNumber?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  situation?: string;
+};
+
+export const EvaluationForm = ({ onComplete }: { onComplete: (data: EvaluationSubmission) => void }) => {
   const router = useRouter();
   const [formData, setFormData] = useState({ 
     firstName: '', 

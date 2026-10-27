@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { sql } from "@/app/lib/db";
-import { cancelSubscription } from "@/lib/stripe";
+import { cancelSubscription, stripe } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

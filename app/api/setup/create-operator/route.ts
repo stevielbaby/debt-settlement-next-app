@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/app/lib/db';
+import { hashPassword, setUserPassword } from '@/app/lib/password-utils';
 
 export async function POST(req: Request) {
   // Dev-only endpoint - remove in production
@@ -29,32 +30,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to get organization ID' }, { status: 500 });
     }
 
-    // Create or update test operator user with correct bcrypt hash for password: operator123
+    const email = 'operator@strattondefense.com';
+    const passwordHash = await hashPassword('operator123');
     const userResult = await sql`
-      INSERT INTO app.users (email, password_hash, name, role, org_id, status)
+      INSERT INTO app.users (email, password_hash, name, role, org_id, status, created_at, updated_at)
       VALUES (
-        'operator@strattondefense.com',
-        '$2b$10$gtBp8b5TmLiFWMiiD6QD2OU6tc5Kp9qs.Zj3tVa0cOucw6JRut1hW',
+        ${email},
+        ${passwordHash},
         'Test Operator',
         'operator',
         ${orgId},
-        'active'
+        'active',
+        NOW(),
+        NOW()
       )
       ON CONFLICT (email) DO UPDATE SET
-        password_hash = '$2b$10$gtBp8b5TmLiFWMiiD6QD2OU6tc5Kp9qs.Zj3tVa0cOucw6JRut1hW',
         role = 'operator',
-        status = 'active'
+        status = 'active',
+        updated_at = NOW()
       RETURNING id, email, role
     `;
+    const operator = await setUserPassword(email, 'operator123');
 
     return NextResponse.json({
       success: true,
       message: 'Operator setup complete',
-      operator: userResult.length > 0 ? userResult[0] : { email: 'operator@strattondefense.com', role: 'operator' },
-      credentials: {
-        email: 'operator@strattondefense.com',
-        password: 'operator123'
-      }
+      operator: userResult[0] ?? operator,
     });
   } catch (error) {
     console.error('Setup error:', error);

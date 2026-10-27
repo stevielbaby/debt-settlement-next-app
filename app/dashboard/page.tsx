@@ -59,12 +59,9 @@ function DashboardContent() {
 
     const checkCalendarStatus = async () => {
       try {
-        const response = await fetch('/api/calendar/connection-status');
+        const response = await fetch('/api/bookings/link');
         const data = await response.json();
-        
-        // Calendar is linked if connected AND settings are configured
-        const isLinked = data.connected && data.settings && data.settings.calendarId;
-        setCalendarLinked(isLinked);
+        setCalendarLinked(Boolean(data.url));
       } catch (error) {
         console.error('Error checking calendar status:', error);
         setCalendarLinked(false);

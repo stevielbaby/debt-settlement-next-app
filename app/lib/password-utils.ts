@@ -1,21 +1,29 @@
-// app/lib/password-utils.ts
-import crypto from 'crypto';
+import bcrypt from "bcryptjs";
+import { sql } from "@/app/lib/db";
 
-/**
- * Hash a password using SHA-256 (simple approach)
- * For production, consider using bcrypt instead
- */
-export function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
+const BCRYPT_ROUNDS = 10;
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-/**
- * Verify a password against a hash
- */
-export function verifyPassword(password: string, hash: string): boolean {
-  const passwordHash = hashPassword(password);
-  return crypto.timingSafeEqual(
-    Buffer.from(passwordHash),
-    Buffer.from(hash)
-  );
+export async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
+  if (!passwordHash?.startsWith("$2")) return false;
+  return bcrypt.compare(password, passwordHash);
+}
+
+export async function setUserPassword(email: string, password: string) {
+  const passwordHash = await hashPassword(password);
+  const rows = await sql`
+    UPDATE app.users
+    SET password_hash = ${passwordHash}, updated_at = NOW()
+    WHERE lower(email) = lower(${email})
+    RETURNING id, email, role
+  `;
+
+  const user = rows[0];
+  if (!user) {
+    throw new Error(`No user found for ${email}`);
+  }
+  return user;
 }

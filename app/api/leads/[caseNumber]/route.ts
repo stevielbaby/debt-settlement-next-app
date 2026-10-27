@@ -36,7 +36,7 @@ export async function GET(
           appointment_slot_start,
           appointment_slot_end,
           created_at
-        FROM leads
+        FROM app.leads
         WHERE case_number = ${caseNumber}
         LIMIT 1
       `;
@@ -55,7 +55,7 @@ export async function GET(
               debt_amount,
               current_company,
               created_at
-            FROM leads
+            FROM app.leads
             WHERE id = ${caseNumber}
             LIMIT 1
           `;

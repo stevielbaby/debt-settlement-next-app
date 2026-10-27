@@ -1,4 +1,5 @@
 import { sql } from '@/app/lib/db';
+import { verifyPassword } from '@/app/lib/password-utils';
 
 async function checkOperator() {
   try {
@@ -24,11 +25,8 @@ async function checkOperator() {
     console.log('  Status:', user.status);
     console.log('  Org ID:', user.org_id);
     console.log('  Name:', user.name);
-    console.log('  Password Hash:', user.password_hash);
 
-    // Test bcrypt
-    const bcrypt = require('bcryptjs');
-    const isValid = await bcrypt.compare('operator123', user.password_hash);
+    const isValid = await verifyPassword('operator123', user.password_hash);
     console.log('  Password Match:', isValid ? '✅ VALID' : '❌ INVALID');
 
   } catch (error) {
