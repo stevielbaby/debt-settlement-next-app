@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ShieldCheck, FileText, Settings, Building2, Calendar, LogOut } from 'lucide-react';
+import { InviteOperatorForm } from '@/app/components/InviteOperatorForm';
 import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
@@ -131,6 +132,11 @@ export default function OperatorSettingsPage() {
             <div className="text-white">operator@test.com</div>
           </div>
         </div>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 p-8 space-y-4">
+        <h2 className="text-white font-bold uppercase tracking-widest text-xs">Invite a teammate</h2>
+        <InviteOperatorForm />
       </div>
 
       {/* Calendar Integration */}

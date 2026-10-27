@@ -75,16 +75,31 @@ export function clearSentEmails(): void {
 /**
  * Generate an organization invite email template
  */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function generateInviteEmailTemplate(params: {
   operatorName: string;
   organizationName: string;
   inviteCode: string;
   inviteLink: string;
 }): { htmlBody: string; textBody: string } {
+  const operatorName = escapeHtml(params.operatorName);
+  const organizationName = escapeHtml(params.organizationName);
+  const inviteCode = escapeHtml(params.inviteCode);
+  const inviteLink = escapeHtml(params.inviteLink);
   const htmlBody = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8" />
+  <title>Your ${organizationName} access code</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -101,14 +116,14 @@ export function generateInviteEmailTemplate(params: {
       <h1>You're Invited!</h1>
     </div>
     <div class="content">
-      <p>Hi ${params.operatorName},</p>
-      <p>You've been invited to join <strong>${params.organizationName}</strong> as an operator.</p>
+      <p>Hi ${operatorName},</p>
+      <p>You've been invited to join <strong>${organizationName}</strong> as an operator.</p>
       
       <p><strong>Your Invite Code:</strong></p>
-      <div class="code-box">${params.inviteCode}</div>
+      <div class="code-box">${inviteCode}</div>
       
       <p>Or click the link below to join directly:</p>
-      <a href="${params.inviteLink}" class="button">Accept Invitation</a>
+      <a href="${inviteLink}" class="button">Accept Invitation</a>
       
       <p style="color: #6b7280; font-size: 14px;">
         If you don't recognize this email or didn't expect this invitation, you can safely ignore it.

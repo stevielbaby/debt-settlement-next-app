@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
+import { InviteOperatorForm } from '@/app/components/InviteOperatorForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -277,6 +278,7 @@ export default function OrganizationDetail() {
                     </p>
                   </div>
                 </div>
+                <InviteOperatorForm organizationId={organization.id} />
                 <button
                   onClick={handleGenerateNewCode}
                   disabled={loadingInviteCode}
