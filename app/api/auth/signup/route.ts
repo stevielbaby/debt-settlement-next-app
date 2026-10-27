@@ -10,7 +10,7 @@ import { hashPassword } from '@/app/lib/password-utils';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, role, inviteCode } = body;
+    const { email, password, inviteCode } = body;
 
     // Validation
     if (!email || !password) {
@@ -65,11 +65,12 @@ export async function POST(request: NextRequest) {
 
     const passwordHash = await hashPassword(password);
     const nameFromEmail = email.split('@')[0];
+    const userId = `usr_${crypto.randomUUID()}`;
 
     const createUserResult = await sql`
       INSERT INTO app.users 
-      (email, password_hash, name, role, org_id, status, created_at, updated_at)
-      VALUES (${email}, ${passwordHash}, ${nameFromEmail}, ${role || 'operator'}, ${organizationId}, 'active', NOW(), NOW())
+      (id, email, password_hash, name, role, org_id, status, created_at, updated_at)
+      VALUES (${userId}, ${email}, ${passwordHash}, ${nameFromEmail}, 'operator', ${organizationId}, 'active', NOW(), NOW())
       RETURNING id, email, role, org_id
     `;
 

@@ -235,7 +235,7 @@ function JoinContent() {
               placeholder="ABC12XYZ"
               className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-orange-600 transition-colors font-mono tracking-wider text-center text-lg"
               disabled={loading}
-              maxLength={8}
+              maxLength={16}
             />
             {inviteCode && validatingCode && (
               <p className="text-xs text-zinc-400 mt-1 flex items-center justify-center gap-1">
